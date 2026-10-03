@@ -1,0 +1,128 @@
+<!doctype html>
+<html lang="de">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Urlaubs-Agent</title>
+  <link rel="stylesheet" href="/static/style.css">
+</head>
+<body>
+  <header class="top">
+    <div class="brand">
+      <span class="logo" aria-hidden="true">✈</span>
+      <div>
+        <strong>Urlaubs-Agent</strong>
+        <small>Dein persönlicher Reiseplaner · bucht nichts, plant alles</small>
+      </div>
+    </div>
+    <span id="demo" class="badge" hidden>Demo-Modus</span>
+  </header>
+
+  <nav class="tabs" role="tablist">
+    <button role="tab" data-tab="ideas" aria-selected="true">Ideen finden</button>
+    <button role="tab" data-tab="plan" aria-selected="false">Tagesplan</button>
+    <button role="tab" data-tab="trips" aria-selected="false">Meine Reisen</button>
+  </nav>
+
+  <main>
+    <!-- Ideen finden -->
+    <section id="tab-ideas" class="panel">
+      <form id="brief" class="card form">
+        <h2>Wohin soll's gehen?</h2>
+        <div class="grid">
+          <label>Wann<input name="when" required placeholder="z. B. Herbstferien, Mai 2027"></label>
+          <label>Nächte<input name="nights" type="number" min="1" max="30" value="7" required></label>
+          <label>Budget gesamt (€)<input name="budget_eur" type="number" min="100" step="50" value="2500" required></label>
+          <label>Abreise ab<input name="origin" required placeholder="z. B. Frankfurt"></label>
+          <label>Erwachsene<input name="adults" type="number" min="1" max="10" value="2" required></label>
+          <label>Kinder<input name="children" type="number" min="0" max="10" value="0"></label>
+        </div>
+        <fieldset class="chips" aria-label="Vorlieben">
+          <legend>Vorlieben</legend>
+        </fieldset>
+        <label>Sonstiges<textarea name="notes" rows="2" placeholder="z. B. nicht zu weit fliegen, Kind 6 Jahre, gerne Natur"></textarea></label>
+        <div class="actions"><button type="submit" class="primary">3 Vorschläge holen</button></div>
+      </form>
+      <div id="ideas-out"></div>
+    </section>
+
+    <!-- Tagesplan -->
+    <section id="tab-plan" class="panel" hidden>
+      <form id="planform" class="card form">
+        <h2>Tagesplan erstellen</h2>
+        <div class="grid">
+          <label class="wide">Ziel<input name="destination" required placeholder="z. B. Lissabon"></label>
+          <label>Tage<input name="days" type="number" min="1" max="14" value="4" required></label>
+          <label>Startdatum<input name="start_date" type="date"></label>
+          <label>Erwachsene<input name="adults" type="number" min="1" max="10" value="2"></label>
+          <label>Kinder<input name="children" type="number" min="0" max="10" value="0"></label>
+          <label>Tempo
+            <select name="pace">
+              <option value="entspannt">entspannt</option>
+              <option value="ausgewogen" selected>ausgewogen</option>
+              <option value="aktiv">aktiv</option>
+            </select>
+          </label>
+        </div>
+        <fieldset class="chips" aria-label="Vorlieben">
+          <legend>Vorlieben</legend>
+        </fieldset>
+        <label>Sonstiges<textarea name="notes" rows="2" placeholder="z. B. Ankunft erst abends, kein Auto"></textarea></label>
+        <div class="actions"><button type="submit" class="primary">Tagesplan erstellen</button></div>
+      </form>
+      <div id="plan-out"></div>
+    </section>
+
+    <!-- Meine Reisen -->
+    <section id="tab-trips" class="panel" hidden>
+      <div class="card">
+        <h2>Meine Reisen</h2>
+        <p class="muted">Gespeicherte Vorschläge und Tagespläne. Nur du siehst sie.</p>
+        <ul id="trips" class="trips"></ul>
+      </div>
+      <div id="trip-out"></div>
+    </section>
+  </main>
+
+  <div id="toast" role="status" aria-live="polite" hidden></div>
+
+  <template id="t-suggestion">
+    <article class="card suggestion">
+      <header>
+        <h3 class="dest"></h3>
+        <span class="price"></span>
+      </header>
+      <p class="why"></p>
+      <dl class="facts">
+        <div><dt>Wetter</dt><dd class="weather"></dd></div>
+        <div><dt>Anreise</dt><dd class="getting"></dd></div>
+        <div><dt>Unterkunft</dt><dd class="stay"></dd></div>
+      </dl>
+      <h4>Highlights</h4>
+      <ul class="highlights"></ul>
+      <details>
+        <summary>Kostenschätzung</summary>
+        <table class="costs"><tbody></tbody></table>
+      </details>
+      <p class="caveat"></p>
+      <div class="actions"><button class="primary to-plan">Tagesplan dafür</button></div>
+    </article>
+  </template>
+
+  <template id="t-day">
+    <article class="day">
+      <header><span class="num"></span><h3 class="theme"></h3><span class="date muted"></span></header>
+      <ol class="slots">
+        <li><span>Vormittag</span><p class="morning"></p></li>
+        <li><span>Nachmittag</span><p class="afternoon"></p></li>
+        <li><span>Abend</span><p class="evening"></p></li>
+      </ol>
+      <p class="extra"><b>Essen:</b> <span class="food"></span></p>
+      <p class="extra"><b>Bei Regen:</b> <span class="rain"></span></p>
+      <p class="extra muted"><b>Wege:</b> <span class="logistics"></span></p>
+    </article>
+  </template>
+
+  <script src="/static/app.js"></script>
+</body>
+</html>

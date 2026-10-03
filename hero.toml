@@ -1,0 +1,20 @@
+# Urlaubs-Agent - one instance per person.
+[app]
+name = "urlaubs-agent"
+
+[deploy]
+cpu = 1
+memory_mb = 512
+port = 8080
+health_path = "/healthz"
+# Behind the platform login: the agent and its saved trips belong to one person.
+public = false
+
+[env]
+LOG_LEVEL = "info"
+DATA_DIR = "/data"
+AGENT_MODEL = "claude-opus-5-5"
+AGENT_EFFORT = "medium"
+# The API key is a secret, set per instance:
+#   heroctl secrets set ANTHROPIC_API_KEY --project urlaubs-agent
+# Without it the agent runs in demo mode (sample answers, no API calls).
