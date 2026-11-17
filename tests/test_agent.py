@@ -33,7 +33,7 @@ def completion(content: str, finish: str = "stop") -> dict:
 
 
 def make_agent(monkeypatch, handler, spend=None) -> TravelAgent:
-    monkeypatch.setenv("OPENROUTER_API_KEY", "sk-test-key")
+    monkeypatch.setenv("OPENROUTER_API_KEY", "sk-or-test-key")
     monkeypatch.delenv("AGENT_FAKE", raising=False)
     return TravelAgent(transport=httpx.MockTransport(handler), spend=spend)
 
@@ -56,7 +56,7 @@ async def test_a_call_names_the_model_the_schema_and_sends_the_key(monkeypatch):
 
     result = await make_agent(monkeypatch, handler).suggest(BRIEF)
     assert isinstance(result, Suggestions)
-    assert seen["auth"] == "Bearer sk-test-key"
+    assert seen["auth"] == "Bearer sk-or-test-key"
     assert seen["url"].endswith("/chat/completions")
     body = seen["body"]
     assert body["model"] == "deepseek/deepseek-v4-flash"
@@ -113,10 +113,10 @@ async def test_a_cut_off_answer_says_the_plan_was_too_long(monkeypatch):
 
 
 async def test_the_error_text_never_carries_the_key(monkeypatch):
-    handler = lambda request: httpx.Response(401, text="bad key sk-test-key")
+    handler = lambda request: httpx.Response(401, text="bad key sk-or-test-key")
     with pytest.raises(AgentError) as info:
         await make_agent(monkeypatch, handler).suggest(BRIEF)
-    assert "sk-test-key" not in str(info.value)
+    assert "sk-or-test-key" not in str(info.value)
 
 
 async def test_the_daily_limit_stops_a_call_before_it_costs_anything(monkeypatch, tmp_path):
@@ -141,3 +141,10 @@ def test_try_spend_counts_per_day_and_never_goes_over(tmp_path):
     assert [store.try_spend(3, "2026-11-17") for _ in range(5)] == [True, True, True, False, False]
     assert store.try_spend(3, "2026-11-18"), "a new day starts at zero"
     assert store.calls_today("2026-11-17") == 3
+
+
+async def test_a_value_that_is_not_an_openrouter_key_means_demo_mode(monkeypatch):
+    for value in ("not-set-yet", "unset", "sk-ant-wrong-provider", "   "):
+        monkeypatch.setenv("OPENROUTER_API_KEY", value)
+        monkeypatch.delenv("AGENT_FAKE", raising=False)
+        assert TravelAgent().fake, value

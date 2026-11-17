@@ -75,7 +75,13 @@ class TravelAgent:
     ) -> None:
         """transport: for tests. spend: called before every model call, False means the
         daily limit is used up."""
-        self._key = os.getenv("OPENROUTER_API_KEY", "")
+        key = os.getenv("OPENROUTER_API_KEY", "").strip()
+        # A value that is not an OpenRouter key (a placeholder, a typo) means "no key": the
+        # agent then runs in demo mode instead of sending every request to a 401.
+        if key and not key.startswith("sk-or-"):
+            logger.warning("OPENROUTER_API_KEY does not look like an OpenRouter key: running in demo mode")
+            key = ""
+        self._key = key
         self.fake = os.getenv("AGENT_FAKE") == "1" or not self._key
         self._spend = spend
         self._client = (

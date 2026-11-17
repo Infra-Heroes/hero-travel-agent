@@ -29,7 +29,7 @@ AGENT_DAILY_CALLS = "30"
 # Secrets, set once per project (the values are never in this file):
 #   heroctl secrets set OPENROUTER_API_KEY --project urlaubs-agent
 #   heroctl secrets set AGENT_PASSWORD --project urlaubs-agent        (at least 8 characters)
-# Without the key the agent runs in demo mode (sample answers, no calls); without the
-# password it serves nothing.
+# Without a key (or with a value that is not an sk-or-... key) the agent runs in demo mode
+# (sample answers, no calls); without the password it serves nothing.
 OPENROUTER_API_KEY = "secret:OPENROUTER_API_KEY"
 AGENT_PASSWORD = "secret:AGENT_PASSWORD"
