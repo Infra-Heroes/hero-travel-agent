@@ -1,7 +1,8 @@
 """Urlaubs-Agent: a personal travel planner that suggests and plans, never books.
 
-One instance per person, deployed on InfraHeroes behind the platform login
-(public = false). Saved trips live on the instance's own volume.
+One instance per person, deployed on InfraHeroes. The agent has its own password
+gate (app/auth.py): a customer app has no login in front of it. Saved trips live on
+the instance's own volume.
 """
 
 from __future__ import annotations
@@ -10,22 +11,32 @@ import os
 from datetime import date, timedelta
 from pathlib import Path
 from typing import Any
+from urllib.parse import parse_qs
 
-from fastapi import FastAPI, HTTPException
-from fastapi.responses import FileResponse, JSONResponse, Response
+from fastapi import FastAPI, HTTPException, Request
+from fastapi.responses import FileResponse, JSONResponse, RedirectResponse, Response
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, Field, ValidationError
 
 from app.agent import AgentError, TravelAgent
+from app.auth import COOKIE, SESSION_SECONDS, Gate, client_address, gate_middleware, is_https, login_page
 from app.schemas import DayPlan, DayPlanRequest, Suggestions, TripBrief
 from app.store import TripStore
 
 DATA_DIR = Path(os.getenv("DATA_DIR", "./data"))
 STATIC = Path(__file__).parent / "static"
 
+DAILY_CALLS = int(os.getenv("AGENT_DAILY_CALLS", "30"))
+
 app = FastAPI(title="Urlaubs-Agent", docs_url=None, redoc_url=None)
-agent = TravelAgent()
 store = TripStore(DATA_DIR / "trips.db")
+agent = TravelAgent(spend=lambda: store.try_spend(DAILY_CALLS))
+gate = Gate()
+
+
+@app.middleware("http")
+async def password_gate(request: Request, call_next):  # type: ignore[no-untyped-def]
+    return await gate_middleware(request, call_next, gate)
 
 
 @app.middleware("http")
@@ -49,7 +60,48 @@ async def agent_error(_, exc: AgentError) -> JSONResponse:
 
 @app.get("/healthz")
 async def healthz() -> dict[str, Any]:
-    return {"status": "ok", "demo": agent.fake}
+    # "auth" false means AGENT_PASSWORD is missing or too short: the agent serves nothing.
+    return {"status": "ok", "demo": agent.fake, "auth": gate.configured}
+
+
+@app.get("/login", include_in_schema=False)
+async def login_form(request: Request) -> Response:
+    if gate.valid_session(request.cookies.get(COOKIE)):
+        return RedirectResponse("/", status_code=303)
+    if not gate.configured:
+        return login_page("Der Agent ist nicht eingerichtet (AGENT_PASSWORD fehlt).", 503)
+    return login_page()
+
+
+@app.post("/login", include_in_schema=False)
+async def login(request: Request) -> Response:
+    if not gate.configured:
+        return login_page("Der Agent ist nicht eingerichtet (AGENT_PASSWORD fehlt).", 503)
+    address = client_address(request)
+    if gate.locked(address):
+        return login_page("Zu viele Versuche. Bitte in einigen Minuten nochmal.", 429)
+    body = (await request.body())[:4096].decode("utf-8", errors="replace")
+    password = parse_qs(body).get("password", [""])[0]
+    if not gate.check_password(password):
+        gate.record_failure(address)
+        return login_page("Das Passwort stimmt nicht.", 401)
+    response = RedirectResponse("/", status_code=303)
+    response.set_cookie(
+        COOKIE,
+        gate.new_session(),
+        max_age=SESSION_SECONDS,
+        httponly=True,
+        samesite="strict",
+        secure=is_https(request),
+    )
+    return response
+
+
+@app.post("/logout", include_in_schema=False)
+async def logout() -> Response:
+    response = RedirectResponse("/login", status_code=303)
+    response.delete_cookie(COOKIE)
+    return response
 
 
 @app.post("/api/suggest", response_model=Suggestions)

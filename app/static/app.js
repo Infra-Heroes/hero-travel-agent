@@ -17,6 +17,10 @@ async function api(path, options = {}) {
     headers: { "Content-Type": "application/json", Accept: "application/json" },
     ...options,
   });
+  if (res.status === 401) {
+    window.location.href = "/login";
+    throw new Error("Bitte anmelden.");
+  }
   if (res.status === 204) return null;
   const body = await res.json().catch(() => ({}));
   if (!res.ok) {

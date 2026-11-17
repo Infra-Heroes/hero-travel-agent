@@ -1,0 +1,53 @@
+# A pull request is the gate, a push to main is what deploys, manual is the escape hatch.
+# (A branch with an open pull request fires push and pull_request; only the pull request
+# runs, so the build does not run twice at the same moment.)
+when:
+  - event: pull_request
+  - event: push
+    branch: main
+  - event: manual
+
+steps:
+  lint:
+    image: python:3.14-slim
+    commands:
+      - pip install --no-cache-dir -e '.[dev]'
+      - ruff check .
+      - ruff format --check .
+
+  test:
+    image: python:3.14-slim
+    commands:
+      - pip install --no-cache-dir -e '.[dev]'
+      - pytest -q
+
+  # bandit looks for code patterns, pip-audit for known CVEs in the dependencies; the
+  # pip shipped in the image may carry advisories of its own, so it is upgraded first.
+  security:
+    image: python:3.14-slim
+    commands:
+      - pip install --no-cache-dir --upgrade pip
+      - pip install --no-cache-dir -e '.[dev]'
+      - bandit -r app -ll
+      - pip-audit --progress-spinner off
+
+  deploy:
+    image: alpine:3.20
+    volumes:
+      # The agent runs rootless as woodpecker-agent (uid 3002); this is its own Podman,
+      # the one that runs these steps, so the step gains no more than it has.
+      - /run/user/3002/podman/podman.sock:/var/run/docker.sock
+    environment:
+      HERO_API_URL: "https://api.infra-heroes.de"
+      HERO_TOKEN:
+        from_secret: hero_token
+    commands:
+      - apk add --no-cache curl jq docker-cli
+      # The newest heroctl release; no token needed.
+      - TAG=$(curl -fsS https://codeberg.org/api/v1/repos/InfraHeroes/heroctl/releases/latest | jq -r .tag_name)
+      - curl -fsSL -o /usr/local/bin/heroctl "https://codeberg.org/InfraHeroes/heroctl/releases/download/$TAG/heroctl-linux-amd64"
+      - chmod +x /usr/local/bin/heroctl
+      - heroctl deploy --project urlaubs-agent --yes --token "$HERO_TOKEN"
+    when:
+      event: [push, manual]
+      branch: main

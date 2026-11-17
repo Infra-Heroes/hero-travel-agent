@@ -1,12 +1,12 @@
 """The travel agent's two jobs: suggest trips for a brief, and plan the days.
 
-Both are single structured calls to Claude - the model answers in JSON that
-matches a schema, so the page gets data it can render rather than prose it
-has to parse. Nothing here books, pays or contacts anybody: prices are
-estimates and say so.
+Both are single structured calls to a model on OpenRouter (DeepSeek V4 Flash by
+default: cheap, long context, JSON-schema output). The model answers in JSON that
+matches a schema, so the page gets data it can render rather than prose it has to
+parse. Nothing here books, pays or contacts anybody: prices are estimates and say so.
 
-Without an API key (or with AGENT_FAKE=1) a deterministic stand-in answers,
-so the app runs locally and in tests without a network or a bill.
+Without an API key (or with AGENT_FAKE=1) a deterministic stand-in answers, so the app
+runs locally and in tests without a network or a bill.
 """
 
 from __future__ import annotations
@@ -14,18 +14,23 @@ from __future__ import annotations
 import json
 import logging
 import os
+from collections.abc import Callable
 from datetime import datetime, timedelta
 from typing import Any
 from zoneinfo import ZoneInfo
 
-import anthropic
+import httpx
+from pydantic import ValidationError
 
 from app.schemas import DayPlan, DayPlanRequest, Suggestions, TripBrief
 
 logger = logging.getLogger("travel-agent")
 
-MODEL = os.getenv("AGENT_MODEL", "claude-opus-5-5")
-EFFORT = os.getenv("AGENT_EFFORT", "medium")
+BASE_URL = os.getenv("OPENROUTER_BASE_URL", "https://openrouter.ai/api/v1")
+MODEL = os.getenv("AGENT_MODEL", "deepseek/deepseek-v4-flash")
+EFFORT = os.getenv("AGENT_EFFORT", "medium")  # low | medium | high
+MAX_TOKENS = int(os.getenv("AGENT_MAX_TOKENS", "8000"))
+TIMEOUT_SECONDS = float(os.getenv("AGENT_TIMEOUT_SECONDS", "120"))
 
 
 class AgentError(Exception):
@@ -63,41 +68,91 @@ def _schema(model: type) -> dict[str, Any]:
 
 
 class TravelAgent:
-    def __init__(self) -> None:
-        self.fake = os.getenv("AGENT_FAKE") == "1" or not os.getenv("ANTHROPIC_API_KEY")
-        self._client = None if self.fake else anthropic.AsyncAnthropic()
+    def __init__(
+        self,
+        transport: httpx.AsyncBaseTransport | None = None,
+        spend: Callable[[], bool] | None = None,
+    ) -> None:
+        """transport: for tests. spend: called before every model call, False means the
+        daily limit is used up."""
+        key = os.getenv("OPENROUTER_API_KEY", "").strip()
+        # A value that is not an OpenRouter key (a placeholder, a typo) means "no key": the
+        # agent then runs in demo mode instead of sending every request to a 401.
+        if key and not key.startswith("sk-or-"):
+            logger.warning("OPENROUTER_API_KEY does not look like an OpenRouter key: running in demo mode")
+            key = ""
+        self._key = key
+        self.fake = os.getenv("AGENT_FAKE") == "1" or not self._key
+        self._spend = spend
+        self._client = (
+            None
+            if self.fake
+            else httpx.AsyncClient(
+                base_url=BASE_URL,
+                timeout=TIMEOUT_SECONDS,
+                transport=transport,
+                headers={
+                    "Authorization": f"Bearer {self._key}",
+                    "X-Title": "Urlaubs-Agent",
+                },
+            )
+        )
 
-    async def _ask(self, prompt: str, model_cls: type) -> Any:
+    def _body(self, prompt: str, model_cls: type, extra: str = "") -> dict[str, Any]:
+        return {
+            "model": MODEL,
+            "max_tokens": MAX_TOKENS,
+            "messages": [
+                {"role": "system", "content": SYSTEM},
+                {"role": "user", "content": prompt + extra},
+            ],
+            "response_format": {
+                "type": "json_schema",
+                "json_schema": {"name": "result", "strict": True, "schema": _schema(model_cls)},
+            },
+            # Only providers that really support the schema; others would answer in prose.
+            "provider": {"require_parameters": True},
+            "reasoning": {"effort": EFFORT, "exclude": True},
+        }
+
+    async def _call(self, body: dict[str, Any]) -> tuple[str, str]:
         assert self._client is not None
         try:
-            response = await self._client.beta.messages.create(
-                model=MODEL,
-                max_tokens=16000,
-                system=SYSTEM,
-                messages=[{"role": "user", "content": prompt}],
-                output_config={
-                    "effort": EFFORT,
-                    "format": {"type": "json_schema", "schema": _schema(model_cls)},
-                },
-                # A declined request is re-run on a suitable model instead
-                # of coming back empty.
-                betas=["server-side-fallback-2026-07-01"],
-                fallbacks="default",
-            )
-        except anthropic.RateLimitError as exc:
-            raise AgentError("Der Agent ist gerade ausgelastet. Bitte gleich nochmal versuchen.") from exc
-        except anthropic.APIConnectionError as exc:
+            res = await self._client.post("/chat/completions", json=body)
+        except (httpx.TimeoutException, httpx.TransportError) as exc:
             raise AgentError("Der Agent ist gerade nicht erreichbar.") from exc
-        except anthropic.APIStatusError as exc:
-            logger.exception("Claude API error")
+        if res.status_code == 429:
+            raise AgentError("Der Agent ist gerade ausgelastet. Bitte gleich nochmal versuchen.")
+        if res.status_code >= 400:
+            # 401/402 are the operator's problem (key, credit): log it, tell the person little.
+            logger.error("OpenRouter answered %s: %s", res.status_code, res.text[:300])
+            raise AgentError("Der Agent konnte die Anfrage nicht bearbeiten.")
+        try:
+            choice = res.json()["choices"][0]
+            return choice["message"].get("content") or "", choice.get("finish_reason") or ""
+        except (ValueError, KeyError, IndexError, TypeError) as exc:
+            logger.error("Unreadable OpenRouter answer: %s", res.text[:300])
             raise AgentError("Der Agent konnte die Anfrage nicht bearbeiten.") from exc
 
-        if response.stop_reason == "refusal":
-            raise AgentError("Zu dieser Anfrage kann der Agent keinen Vorschlag machen.")
-        if response.stop_reason == "max_tokens":
-            raise AgentError("Der Plan wurde zu lang. Bitte weniger Tage oder weniger Details anfragen.")
-        text = next((b.text for b in response.content if b.type == "text"), "")
-        return model_cls.model_validate(json.loads(text))
+    async def _ask(self, prompt: str, model_cls: type) -> Any:
+        if self._spend is not None and not self._spend():
+            raise AgentError("Das Tageslimit für Anfragen ist erreicht. Morgen geht es weiter.")
+        extra = ""
+        for attempt in (1, 2):
+            text, finish = await self._call(self._body(prompt, model_cls, extra))
+            if finish == "length":
+                raise AgentError("Der Plan wurde zu lang. Bitte weniger Tage oder weniger Details anfragen.")
+            if finish == "content_filter":
+                raise AgentError("Zu dieser Anfrage kann der Agent keinen Vorschlag machen.")
+            try:
+                return model_cls.model_validate(json.loads(text))
+            except (ValueError, ValidationError):
+                logger.warning("Model answer did not match the schema (attempt %s)", attempt)
+                extra = (
+                    "\n\nWICHTIG: Antworte ausschließlich mit gültigem JSON, das exakt dem "
+                    "vorgegebenen Schema entspricht, ohne Text davor oder danach."
+                )
+        raise AgentError("Der Agent hat keine brauchbare Antwort geliefert. Bitte nochmal versuchen.")
 
     async def suggest(self, brief: TripBrief) -> Suggestions:
         if self.fake:
