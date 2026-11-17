@@ -72,9 +72,29 @@ async def security_headers(request, call_next):  # type: ignore[no-untyped-def]
     response.headers.setdefault(
         "Content-Security-Policy",
         "default-src 'self'; img-src 'self' data:; style-src 'self'; script-src 'self'; "
-        "frame-ancestors 'none'; base-uri 'self'; form-action 'self'",
+        "frame-ancestors 'none'; base-uri 'self'; form-action 'self'; object-src 'none'",
     )
+    response.headers.setdefault("Permissions-Policy", "camera=(), microphone=(), geolocation=(), payment=()")
+    response.headers.setdefault("Cross-Origin-Opener-Policy", "same-origin")
+    if is_https(request):
+        response.headers.setdefault("Strict-Transport-Security", "max-age=31536000")
+    if request.url.path.startswith("/api/"):
+        # Answers are personal (account, trips): never kept by a cache.
+        response.headers.setdefault("Cache-Control", "no-store")
     return response
+
+
+MAX_BODY_BYTES = 256 * 1024
+MAX_TRIPS_PER_USER = 100
+
+
+@app.middleware("http")
+async def limit_body_size(request, call_next):  # type: ignore[no-untyped-def]
+    """Refuse oversized requests before they are read: every legitimate body here is small."""
+    length = request.headers.get("content-length", "")
+    if length.isdigit() and int(length) > MAX_BODY_BYTES:
+        return JSONResponse({"detail": "Request too large"}, status_code=413)
+    return await call_next(request)
 
 
 @app.exception_handler(AgentError)
@@ -91,6 +111,10 @@ def current_user(request: Request) -> dict[str, Any]:
 
 
 def _is_loopback(request: Request) -> bool:
+    # A forwarded request names its origin in a header anyone can set: only a direct
+    # connection from the machine itself counts.
+    if request.headers.get("x-forwarded-for") or request.headers.get("forwarded"):
+        return False
     return client_address(request) in ("127.0.0.1", "::1", "localhost")
 
 
@@ -320,6 +344,8 @@ async def save_trip(body: SaveTrip, request: Request) -> dict[str, Any]:
         (Suggestions if body.kind == "suggestions" else DayPlan).model_validate(body.payload)
     except ValidationError as exc:
         raise HTTPException(422, say(request, "bad_plan")) from exc
+    if len(store.list(user["id"])) >= MAX_TRIPS_PER_USER:
+        raise HTTPException(409, say(request, "too_many_trips", n=MAX_TRIPS_PER_USER))
     return store.save(user["id"], body.title, body.kind, body.payload)
 
 
@@ -339,6 +365,7 @@ async def delete_trip(trip_id: str, request: Request) -> Response:
 
 
 def _ics_escape(text: str) -> str:
+    text = text.replace("\r", "")
     return text.replace("\\", "\\\\").replace(";", "\\;").replace(",", "\\,").replace("\n", "\\n")
 
 

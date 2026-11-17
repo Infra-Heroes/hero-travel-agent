@@ -43,6 +43,10 @@ MESSAGES: dict[str, dict[str, str]] = {
         "de": "Der Agent ist für heute ausgelastet. Bitte morgen wieder versuchen.",
         "en": "The agent is fully booked for today. Please try again tomorrow.",
     },
+    "too_many_trips": {
+        "de": "Du hast {n} Reisen gespeichert, das ist das Maximum. Bitte lösche eine.",
+        "en": "You have saved {n} trips, which is the maximum. Please delete one.",
+    },
     "bad_plan": {"de": "Ungültiger Reiseplan", "en": "Invalid trip plan"},
     "no_trip": {"de": "Reise nicht gefunden", "en": "Trip not found"},
     "no_plan": {"de": "Kein Tagesplan gefunden", "en": "No day plan found"},

@@ -16,16 +16,26 @@ function toast(msg) {
 const body401 = __("Anmelden");
 
 async function api(path, options = {}) {
-  const res = await fetch(path, {
-    headers: { "Content-Type": "application/json", Accept: "application/json", "X-Lang": window.I18N.lang },
-    ...options,
-  });
+  let res;
+  try {
+    res = await fetch(path, {
+      headers: { "Content-Type": "application/json", Accept: "application/json", "X-Lang": window.I18N.lang },
+      signal: AbortSignal.timeout(170000),
+      ...options,
+    });
+  } catch {
+    throw new Error(__("Keine Verbindung zum Server oder zu lange gewartet. Bitte nochmal versuchen."));
+  }
   if (res.status === 401) {
     window.location.href = "/";
     throw new Error(body401);
   }
   if (res.status === 204) return null;
   const body = await res.json().catch(() => ({}));
+  if (!res.ok && !body.detail && !Array.isArray(body.detail)) {
+    // Not an answer of the agent (a proxy, a restart): the request may not have arrived.
+    throw new Error(`${__("Der Server hat nicht richtig geantwortet")} (${res.status}). ${__("Bitte gleich nochmal versuchen.")}`);
+  }
   if (!res.ok) {
     const detail = Array.isArray(body.detail) ? __("Bitte die Eingabe prüfen.") : body.detail;
     throw new Error(detail || `${__("Fehler")} ${res.status}`);
@@ -66,15 +76,40 @@ function formData(form) {
   return data;
 }
 
+// While the agent works (a day plan can take a minute or two) say so, with a running clock and
+// what to expect, so it does not look hung.
+const PROGRESS = [
+  [0, "Der Agent plant…"],
+  [8, "Das dauert einen Moment. Tagespläne brauchen bis zu zwei Minuten."],
+  [35, "Noch dabei. Längere Pläne brauchen etwas mehr Zeit."],
+  [75, "Gleich geschafft. Bitte die Seite nicht schließen."],
+  [110, "Es dauert ungewöhnlich lange. Wenn nichts kommt, bitte nochmal versuchen."],
+];
+
 async function busy(button, label, fn) {
   const old = button.textContent;
   button.disabled = true;
   button.textContent = label;
+  const box = document.createElement("p");
+  box.className = "progress";
+  box.setAttribute("role", "status");
+  const started = Date.now();
+  const tick = () => {
+    const sec = Math.floor((Date.now() - started) / 1000);
+    const step = [...PROGRESS].reverse().find(([from]) => sec >= from);
+    box.textContent = `${__(step[1])} (${sec} s)`;
+    button.textContent = `${label} ${sec} s`;
+  };
+  tick();
+  const timer = setInterval(tick, 1000);
+  (button.closest("form") || button.parentElement).append(box);
   try {
     return await fn();
   } catch (err) {
     toast(err.message);
   } finally {
+    clearInterval(timer);
+    box.remove();
     button.disabled = false;
     button.textContent = old;
     // Every request uses up one of today's: show what is left.
