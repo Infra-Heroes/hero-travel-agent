@@ -310,3 +310,25 @@ def test_the_agent_is_told_to_answer_in_english(harness):
     brief = TripBrief(when="Mai", nights=3, budget_eur=500, adults=1, origin="Berlin", lang="en")
     assert "Englisch" in brief.as_prompt()
     assert "Englisch" not in brief.model_copy(update={"lang": "de"}).as_prompt()
+
+
+def test_hardening_headers_body_limit_and_trip_cap(harness):
+    c = harness.sign_in("sec@example.com")
+    res = c.get("/api/me")
+    assert res.headers["cache-control"] == "no-store"
+    assert "object-src 'none'" in res.headers["content-security-policy"]
+    assert "Permissions-Policy" in res.headers
+
+    big = c.post("/api/trips", content=b"x" * 300_000, headers={"content-type": "application/json"})
+    assert big.status_code == 413
+
+    plan = {"destination": "X", "overview": "o", "days": [], "packing_list": []}
+    for _ in range(100):
+        assert c.post("/api/trips", json={"title": "t", "kind": "plan", "payload": plan}).status_code == 201
+    assert c.post("/api/trips", json={"title": "t", "kind": "plan", "payload": plan}).status_code == 409
+
+
+def test_a_forwarded_request_is_never_the_machine_itself(harness):
+    c = harness.client()
+    # No METRICS_TOKEN in the test app: the operator pages are for the machine only.
+    assert c.get("/metrics", headers={"X-Forwarded-For": "127.0.0.1"}).status_code == 403

@@ -111,6 +111,13 @@
     "3 Vorschläge holen": "Get 3 suggestions",
     "Beispiel ausfüllen": "Fill in an example",
     "Der Agent plant…": "The agent is planning…",
+    "Das dauert einen Moment. Tagespläne brauchen bis zu zwei Minuten.": "This takes a moment. Day plans can take up to two minutes.",
+    "Noch dabei. Längere Pläne brauchen etwas mehr Zeit.": "Still working. Longer plans take a little more time.",
+    "Gleich geschafft. Bitte die Seite nicht schließen.": "Almost there. Please keep this page open.",
+    "Es dauert ungewöhnlich lange. Wenn nichts kommt, bitte nochmal versuchen.": "It is taking unusually long. If nothing arrives, please try again.",
+    "Der Server hat nicht richtig geantwortet": "The server did not answer properly",
+    "Bitte gleich nochmal versuchen.": "Please try again in a moment.",
+    "Keine Verbindung zum Server oder zu lange gewartet. Bitte nochmal versuchen.": "No connection to the server, or waited too long. Please try again.",
     "Speichere…": "Saving…",
 
     // plan form
