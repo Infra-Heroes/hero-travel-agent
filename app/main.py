@@ -9,6 +9,8 @@ Saved trips belong to their user. Numbers (users per day, requests, cost) are st
 
 from __future__ import annotations
 
+import asyncio
+import contextlib
 import hmac
 import logging
 import os
@@ -34,6 +36,7 @@ from app.auth import (
 from app.mailer import Mailer, MailError
 from app.mailtemplate import login_mail_html
 from app.metrics import CONTENT_TYPE, Metrics
+from app.report import report_loop, send_report
 from app.schemas import DayPlan, DayPlanRequest, Suggestions, TripBrief
 from app.store import Store
 from app.texts import lang_of, say
@@ -46,7 +49,17 @@ USER_DAILY_QUERIES = int(os.getenv("USER_DAILY_QUERIES", "10"))
 AGENT_DAILY_CALLS = int(os.getenv("AGENT_DAILY_CALLS", "200"))
 METRICS_TOKEN = os.getenv("METRICS_TOKEN", "")
 
-app = FastAPI(title="Urlaubs-Agent", docs_url=None, redoc_url=None)
+
+@contextlib.asynccontextmanager
+async def lifespan(_app: FastAPI):  # type: ignore[no-untyped-def]
+    task = asyncio.create_task(report_loop(store, mailer, USER_DAILY_QUERIES, AGENT_DAILY_CALLS))
+    try:
+        yield
+    finally:
+        task.cancel()
+
+
+app = FastAPI(title="Urlaubs-Agent", docs_url=None, redoc_url=None, lifespan=lifespan)
 store = Store(DATA_DIR / "agent.db")
 auth = Auth(DATA_DIR)
 mailer = Mailer()
@@ -149,6 +162,20 @@ async def stats(request: Request, days: int = 30) -> dict[str, Any]:
     """Users and requests per day, newest first."""
     require_operator(request)
     return {"days": store.stats(max(1, min(days, 365))), "users": store.user_count()}
+
+
+@app.post("/api/report/send", include_in_schema=False)
+async def send_report_now(request: Request) -> dict[str, bool]:
+    """Send today's report right away (operator token), to see what it looks like."""
+    require_operator(request)
+    to = os.getenv("REPORT_TO", "").strip()
+    if not to:
+        raise HTTPException(409, "REPORT_TO is not set")
+    try:
+        await send_report(store, mailer, to, USER_DAILY_QUERIES, AGENT_DAILY_CALLS)
+    except MailError as exc:
+        raise HTTPException(502, "mail not sent") from exc
+    return {"sent": True}
 
 
 @app.get("/impressum", include_in_schema=False)

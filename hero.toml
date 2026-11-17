@@ -43,3 +43,6 @@ SMTP_USER = "secret:SMTP_USER"
 SMTP_PASSWORD = "secret:SMTP_PASSWORD"
 METRICS_TOKEN = "secret:METRICS_TOKEN"
 SESSION_SECRET = "secret:SESSION_SECRET"
+# Daily report to the operator (numbers only). The address is a secret: REPORT_TO.
+REPORT_TO = "secret:REPORT_TO"
+REPORT_HOUR_UTC = "6"

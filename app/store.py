@@ -70,6 +70,7 @@ class Store:
                     PRIMARY KEY (user_id, day)
                 );
                 CREATE TABLE IF NOT EXISTS usage (day TEXT PRIMARY KEY, calls INTEGER NOT NULL);
+                CREATE TABLE IF NOT EXISTS meta (key TEXT PRIMARY KEY, value TEXT NOT NULL);
                 CREATE TABLE IF NOT EXISTS activity (
                     day TEXT NOT NULL,
                     user_id TEXT NOT NULL,
@@ -215,6 +216,17 @@ class Store:
             (since, since, since),
         ).fetchall()
         return [dict(r) for r in rows]
+
+    def get_meta(self, key: str) -> str | None:
+        row = self._db.execute("SELECT value FROM meta WHERE key = ?", (key,)).fetchone()
+        return row["value"] if row else None
+
+    def set_meta(self, key: str, value: str) -> None:
+        with self._lock, self._db:
+            self._db.execute(
+                "INSERT INTO meta (key, value) VALUES (?, ?) ON CONFLICT(key) DO UPDATE SET value = excluded.value",
+                (key, value),
+            )
 
     def user_count(self) -> int:
         return int(self._db.execute("SELECT COUNT(*) FROM users").fetchone()[0])
