@@ -36,11 +36,20 @@
     <section id="tab-ideas" class="panel">
       <form id="brief" class="card form">
         <h2>Wohin soll's gehen?</h2>
+        <details class="help">
+          <summary>So geht's</summary>
+          <ol>
+            <li>Sag, wann, wie lange, mit wem und wie viel es kosten darf. Je genauer, desto besser die Vorschläge.</li>
+            <li>Wähle ein paar Vorlieben und schreibe unter „Sonstiges“, was dir wichtig ist (oder tippe auf einen Vorschlag).</li>
+            <li>Du bekommst drei Ziele. Für eins davon erstellst du den Tagesplan und exportierst ihn als PDF oder in deinen Kalender.</li>
+          </ol>
+          <p class="muted">Der Agent bucht nichts. Preise sind Schätzungen. Jede Anfrage zählt zu deinem Tageslimit.</p>
+        </details>
         <div class="grid">
-          <label>Wann<input name="when" required placeholder="z. B. Herbstferien, Mai 2027"></label>
-          <label>Nächte<input name="nights" type="number" min="1" max="30" value="7" required></label>
-          <label>Budget gesamt (€)<input name="budget_eur" type="number" min="100" step="50" value="2500" required></label>
-          <label>Abreise ab<input name="origin" required placeholder="z. B. Frankfurt"></label>
+          <label>Wann<input name="when" required list="dl-when" placeholder="z. B. Herbstferien, Mai 2027" autocomplete="off"><small class="hint">Monat, Ferien oder Datum</small></label>
+          <label>Nächte<input name="nights" type="number" min="1" max="30" value="7" required><small class="hint">1 bis 30</small></label>
+          <label>Budget gesamt (€)<input name="budget_eur" type="number" min="100" step="50" value="2500" required><small class="hint">für alle zusammen, inkl. Anreise</small></label>
+          <label>Abreise ab<input name="origin" required list="dl-origin" placeholder="z. B. Frankfurt" autocomplete="off"><small class="hint">Ort oder Flughafen</small></label>
           <label>Erwachsene<input name="adults" type="number" min="1" max="10" value="2" required></label>
           <label>Kinder<input name="children" type="number" min="0" max="10" value="0"></label>
         </div>
@@ -48,7 +57,11 @@
           <legend>Vorlieben</legend>
         </fieldset>
         <label>Sonstiges<textarea name="notes" rows="2" placeholder="z. B. nicht zu weit fliegen, Kind 6 Jahre, gerne Natur"></textarea></label>
-        <div class="actions"><button type="submit" class="primary">3 Vorschläge holen</button></div>
+        <div class="ideas" data-for="brief" aria-label="Vorschläge für Sonstiges"></div>
+        <div class="actions">
+          <button type="submit" class="primary">3 Vorschläge holen</button>
+          <button type="button" id="example-brief" class="ghost">Beispiel ausfüllen</button>
+        </div>
       </form>
       <div id="ideas-out"></div>
     </section>
@@ -58,7 +71,7 @@
       <form id="planform" class="card form">
         <h2>Tagesplan erstellen</h2>
         <div class="grid">
-          <label class="wide">Ziel<input name="destination" required placeholder="z. B. Lissabon"></label>
+          <label class="wide">Ziel<input name="destination" required list="dl-dest" placeholder="z. B. Lissabon" autocomplete="off"><small class="hint">Stadt oder Region, mit Land bei Verwechslung (Valencia, Spanien)</small></label>
           <label>Tage<input name="days" type="number" min="1" max="14" value="4" required></label>
           <label>Startdatum<input name="start_date" type="date"></label>
           <label>Erwachsene<input name="adults" type="number" min="1" max="10" value="2"></label>
@@ -75,7 +88,11 @@
           <legend>Vorlieben</legend>
         </fieldset>
         <label>Sonstiges<textarea name="notes" rows="2" placeholder="z. B. Ankunft erst abends, kein Auto"></textarea></label>
-        <div class="actions"><button type="submit" class="primary">Tagesplan erstellen</button></div>
+        <div class="ideas" data-for="plan" aria-label="Vorschläge für Sonstiges"></div>
+        <div class="actions">
+          <button type="submit" class="primary">Tagesplan erstellen</button>
+          <button type="button" id="example-plan" class="ghost">Beispiel ausfüllen</button>
+        </div>
       </form>
       <div id="plan-out"></div>
     </section>
@@ -90,6 +107,10 @@
       <div id="trip-out"></div>
     </section>
   </main>
+
+  <datalist id="dl-when"></datalist>
+  <datalist id="dl-origin"></datalist>
+  <datalist id="dl-dest"></datalist>
 
   <div id="toast" role="status" aria-live="polite" hidden></div>
 

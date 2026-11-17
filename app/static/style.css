@@ -139,10 +139,39 @@ button.link { background: none; border: 0; padding: 0; color: var(--accent); tex
   .packing { columns: 1; }
 }
 @media print {
-  .top, .tabs, form, .actions, #toast, #tab-trips .card { display: none !important; }
+  .top, .tabs, form, .actions, #toast, #tab-trips .card, .legal-footer, .notice-bar { display: none !important; }
   .panel[hidden] { display: none; }
   body { background: #fff; color: #000; }
   .card { box-shadow: none; border: 0; }
+  .day { break-inside: avoid; }
+  .plan-table { font-size: 10px; }
+  .plan-table th { background: #eee !important; }
+  @page { margin: 14mm; }
+}
+
+.hint { display: block; color: var(--muted); font-size: 12px; font-weight: 400; margin-top: 2px; }
+.help { margin: 0 0 12px; padding: 8px 12px; background: var(--accent-soft); border-radius: 10px; font-size: 14px; }
+.help summary { cursor: pointer; font-weight: 600; color: var(--accent); }
+.help ol { margin: 8px 0 4px; padding-left: 20px; }
+.ideas { display: flex; flex-wrap: wrap; gap: 6px; margin: 4px 0 8px; }
+button.idea { background: var(--surface); border: 1px solid var(--line); color: var(--text); border-radius: 999px; padding: 4px 10px; font-size: 13px; }
+button.idea:hover { border-color: var(--accent); color: var(--accent); }
+
+.menu { position: relative; display: inline-block; }
+.menu > summary { list-style: none; cursor: pointer; display: inline-block; padding: 8px 14px; border: 1px solid var(--line); border-radius: 10px; background: var(--surface); }
+.menu > summary::-webkit-details-marker { display: none; }
+.menu-body { position: absolute; z-index: 5; margin-top: 4px; min-width: 260px; padding: 10px 12px; background: var(--surface); border: 1px solid var(--line); border-radius: 12px; box-shadow: var(--shadow); display: grid; gap: 8px; }
+.menu-body .google { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
+
+.table-box { overflow-x: auto; margin-top: 12px; }
+.plan-table { border-collapse: collapse; width: 100%; font-size: 14px; }
+.plan-table th, .plan-table td { border: 1px solid var(--line); padding: 6px 8px; vertical-align: top; text-align: left; }
+.plan-table th { background: var(--accent-soft); white-space: nowrap; }
+@media (max-width: 640px) {
+  .plan-table thead { display: none; }
+  .plan-table tr { display: block; margin-bottom: 12px; border: 1px solid var(--line); border-radius: 10px; }
+  .plan-table td { display: block; border: 0; border-bottom: 1px solid var(--line); }
+  .plan-table td::before { content: attr(data-label); display: block; font-size: 11px; text-transform: uppercase; color: var(--muted); }
 }
 
 .who { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; justify-content: flex-end; }
