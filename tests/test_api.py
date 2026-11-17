@@ -1,20 +1,8 @@
-"""The agent's API, in demo mode (no network, no API key)."""
+"""The planner's API, signed in, in demo mode (no network, no model, no bill)."""
 
 from __future__ import annotations
 
-import importlib
-import os
-import sys
-import tempfile
-
 import pytest
-from fastapi.testclient import TestClient
-
-os.environ["AGENT_FAKE"] = "1"
-os.environ["AGENT_PASSWORD"] = "test-password-123"
-os.environ["DATA_DIR"] = tempfile.mkdtemp()
-sys.modules.pop("app.main", None)
-main = importlib.import_module("app.main")
 
 from app.agent import _schema
 from app.schemas import DayPlan, Suggestions
@@ -31,20 +19,12 @@ BRIEF = {
 
 
 @pytest.fixture
-def client():
-    c = TestClient(main.app)
-    # Every route but /healthz and /login is behind the password.
-    res = c.post(
-        "/login",
-        content="password=test-password-123",
-        headers={"content-type": "application/x-www-form-urlencoded"},
-    )
-    assert res.status_code in (200, 303)
-    return c
+def client(harness):
+    return harness.sign_in()
 
 
-def test_health_reports_demo_mode(client):
-    assert client.get("/healthz").json() == {"status": "ok", "demo": True, "auth": True}
+def test_health_reports_demo_mode_and_mail(harness):
+    assert harness.client().get("/healthz").json() == {"status": "ok", "demo": True, "mail": True}
 
 
 def test_three_suggestions_with_a_cost_breakdown(client):
@@ -101,14 +81,14 @@ def test_only_well_formed_payloads_are_saved(client):
     assert r.status_code == 422
 
 
-def test_the_page_and_security_headers(client):
-    r = client.get("/")
+def test_the_page_and_security_headers(harness):
+    r = harness.client().get("/")
     assert "Urlaubs-Agent" in r.text
     assert r.headers["x-frame-options"] == "DENY"
     assert "default-src 'self'" in r.headers["content-security-policy"]
 
 
-def test_schemas_sent_to_claude_are_closed_and_fully_required():
+def test_schemas_sent_to_the_model_are_closed_and_fully_required():
     """Structured output needs every object closed and every field required."""
     for model in (Suggestions, DayPlan):
 

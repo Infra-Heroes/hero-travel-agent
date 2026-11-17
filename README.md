@@ -16,42 +16,55 @@ Preise sind Schätzungen und als solche gekennzeichnet.
 - Ausgaben des Modells werden nur als Text gerendert, nie als HTML
 
 ## Zugang
-Eine App auf InfraHeroes hat keinen Login davor, der Agent bringt deshalb sein eigenes Passwort mit (`app/auth.py`):
-- `AGENT_PASSWORD` (Secret, mindestens 8 Zeichen) ist das Passwort. **Fehlt es, liefert der Agent nichts außer `/healthz` aus.**
-- Das richtige Passwort setzt ein signiertes Cookie (HttpOnly, SameSite=Strict, unter https Secure, 14 Tage). Ein neues Passwort meldet alle ab.
-- Falsche Passwörter werden begrenzt: 5 pro Adresse und 20 insgesamt in 10 Minuten.
+Die Startseite ist öffentlich. Der Planer ist nur mit Konto erreichbar, und das Konto ist eine E-Mail-Adresse:
+- Adresse eingeben, einen sechsstelligen Code per Mail bekommen, Code eingeben. Ein Passwort gibt es nicht.
+- Der Code gilt 10 Minuten, nur einmal und nur für 5 Versuche. Gespeichert wird nur ein Hash.
+- Die Antwort auf „Code senden“ ist für bekannte und unbekannte Adressen gleich, man kann also nicht erfragen, wer ein Konto hat.
+- Codes anfordern (3 pro Adresse und 10 pro Client in 10 Minuten, 200 pro Stunde insgesamt) und Codes probieren (20 pro Client in 10 Minuten) sind begrenzt.
+- Mit `ALLOWED_EMAILS` oder `ALLOWED_EMAIL_DOMAINS` lässt sich einschränken, wer sich anmelden darf. Leer heißt: jede Adresse.
+- Die Sitzung ist ein signiertes Cookie (HttpOnly, SameSite=Strict, unter https Secure, 14 Tage). Gemerkte Reisen gehören ihrer Person.
+- Ohne Mailserver (`SMTP_HOST`) kann sich niemand anmelden.
 
-## Kosten
-Jede Modellanfrage zählt gegen `AGENT_DAILY_CALLS` (Standard 30 pro Tag, gespeichert im Volume). Ist das Limit erreicht, fragt der Agent das Modell nicht mehr. Der Preis von V4 Flash liegt bei etwa 0,09 $ pro Million Eingabe- und 0,18 $ pro Million Ausgabetoken.
+## Limits und Zahlen
+- Jede Person hat `USER_DAILY_QUERIES` Anfragen pro Tag (Standard 10), und der Agent insgesamt `AGENT_DAILY_CALLS` (Standard 200), weil jede Anfrage Geld kostet. Die Seite zeigt, wie viele noch übrig sind.
+- Gespeichert werden pro Tag: aktive Nutzer, neue Nutzer und Modellanfragen (`GET /api/stats`, nur für den Betreiber).
+- `GET /metrics` liefert Prometheus-Metriken (Bearer-Token `METRICS_TOKEN`, ohne Token nur vom eigenen Rechner): Nutzer, aktive und neue Nutzer heute, Anfragen nach Ergebnis, Codes und Anmeldungen, Antwortzeit des Modells, Token und die von OpenRouter gemeldeten Kosten. Adressen und Codes kommen in keiner Metrik vor.
+- Das Grafana-Dashboard liegt in `deploy/observability/grafana/dashboards/travel-agent.json`.
 
-## Lokal
+## Lokal ausprobieren
 ```bash
 uv venv --python 3.14 && uv pip install -e ".[dev]"
 .venv/bin/pytest -q
-AGENT_PASSWORD=***REMOVED*** DATA_DIR=./data .venv/bin/uvicorn app.main:app --port 8780
-```
 
-## Deploy (eine Instanz pro Person)
-Einmalig pro Instanz:
-```bash
-heroctl projects create urlaubs-agent
-heroctl volumes create urlaubs-data --size 1 --project urlaubs-agent
-heroctl secrets set OPENROUTER_API_KEY --project urlaubs-agent
-heroctl secrets set AGENT_PASSWORD --project urlaubs-agent
-```
-Danach deployt jeder Push auf `main` über die Woodpecker-Pipeline (`.woodpecker/pipeline.yml`: Lint, Test, bandit/pip-audit, dann `heroctl deploy`). Von Hand: `heroctl deploy --project urlaubs-agent`.
+# Mailserver zum Abfangen der Codes (http://localhost:8025), Prometheus (9091) und Grafana (3001)
+docker compose -f deploy/observability/docker-compose.yml up -d
 
-Das Volume gehört beim Start root. Das Entrypoint-Skript übergibt `/data` an den Benutzer `agent` und startet den Server ohne Rechte. Mit einem Volume gibt es genau ein Replikat und kein Scale-to-Zero, ein Redeploy dauert kurz.
+OPENROUTER_API_KEY=sk-or-... METRICS_TOKEN=local-metrics-token SMTP_HOST=localhost SMTP_PORT=1025 \
+  DATA_DIR=./data .venv/bin/uvicorn app.main:app --port 8780
+```
+Ohne `OPENROUTER_API_KEY` antwortet der Agent mit Beispielen. Statt eines Mailservers geht auch `MAIL_BACKEND=console`: Die Codes stehen dann im Log.
+
+## Kosten
+V4 Flash kostet bei OpenRouter etwa 0,09 $ pro Million Eingabe- und 0,18 $ pro Million Ausgabetoken. Beim Ausprobieren kostete eine Anfrage rund 0,0006 $ und dauerte 15 bis 18 Sekunden.
+
+## Deploy
+`hero.toml` und `.woodpecker/pipeline.yml` beschreiben den Deploy auf InfraHeroes (Projekt, Volume und die Secrets stehen in `hero.toml`). Jeder Push auf `main` läuft durch Lint, Test, bandit und pip-audit und deployt dann.
+
+Das Volume gehört beim Start root. Das Entrypoint-Skript übergibt `/data` an den Benutzer `agent` und startet den Server ohne Rechte. Mit einem Volume gibt es genau ein Replikat und kein Scale-to-Zero.
 
 ## Konfiguration
 | Variable | Default | Zweck |
 |---|---|---|
-| `OPENROUTER_API_KEY` | – | API-Key (Secret). Fehlt er, läuft der Demo-Modus |
-| `AGENT_PASSWORD` | – | Passwort (Secret). Fehlt es, wird nichts ausgeliefert |
+| `OPENROUTER_API_KEY` | – | API-Key (Secret). Fehlt er oder ist er kein `sk-or-…`-Key, läuft der Demo-Modus |
 | `AGENT_MODEL` | `deepseek/deepseek-v4-flash` | Modell auf OpenRouter |
 | `AGENT_EFFORT` | `medium` | Denkaufwand (`low`, `medium`, `high`) |
-| `AGENT_DAILY_CALLS` | `30` | Modellanfragen pro Tag |
+| `USER_DAILY_QUERIES` | `10` | Anfragen pro Person und Tag |
+| `AGENT_DAILY_CALLS` | `200` | Anfragen pro Tag insgesamt |
+| `SMTP_HOST`, `SMTP_PORT`, `SMTP_USER`, `SMTP_PASSWORD`, `MAIL_FROM` | – / `587` | Mailserver für die Codes (Port 465 = TLS, sonst STARTTLS). `MAIL_BACKEND=console` schreibt die Codes ins Log |
+| `ALLOWED_EMAILS`, `ALLOWED_EMAIL_DOMAINS` | leer | Wer sich anmelden darf, kommagetrennt. Leer = jede Adresse |
+| `SESSION_SECRET` | wird erzeugt | Schlüssel für die Sitzungen (16+ Zeichen). Ohne Angabe liegt ein zufälliger Schlüssel im Datenverzeichnis |
+| `METRICS_TOKEN` | – | Bearer-Token für `/metrics` und `/api/stats`. Ohne Token nur vom eigenen Rechner |
 | `AGENT_MAX_TOKENS` | `8000` | Obergrenze der Antwortlänge |
 | `AGENT_TIMEOUT_SECONDS` | `120` | Wartezeit auf das Modell |
-| `DATA_DIR` | `./data` | Speicherort der gemerkten Reisen |
+| `DATA_DIR` | `./data` | Datenbank (Nutzer, Reisen, Zähler) |
 | `AGENT_FAKE` | – | `1` erzwingt den Demo-Modus |

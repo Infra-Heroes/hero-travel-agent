@@ -14,6 +14,7 @@ from __future__ import annotations
 import json
 import logging
 import os
+import time
 from collections.abc import Callable
 from datetime import datetime, timedelta
 from typing import Any
@@ -71,10 +72,11 @@ class TravelAgent:
     def __init__(
         self,
         transport: httpx.AsyncBaseTransport | None = None,
-        spend: Callable[[], bool] | None = None,
+        on_call: Callable[[float, dict[str, Any]], None] | None = None,
     ) -> None:
-        """transport: for tests. spend: called before every model call, False means the
-        daily limit is used up."""
+        """transport: for tests. on_call(seconds, usage): told after every model call, for
+        the metrics. usage is what OpenRouter reported (tokens and cost), possibly empty."""
+        self._on_call = on_call
         key = os.getenv("OPENROUTER_API_KEY", "").strip()
         # A value that is not an OpenRouter key (a placeholder, a typo) means "no key": the
         # agent then runs in demo mode instead of sending every request to a 401.
@@ -83,7 +85,6 @@ class TravelAgent:
             key = ""
         self._key = key
         self.fake = os.getenv("AGENT_FAKE") == "1" or not self._key
-        self._spend = spend
         self._client = (
             None
             if self.fake
@@ -113,14 +114,19 @@ class TravelAgent:
             # Only providers that really support the schema; others would answer in prose.
             "provider": {"require_parameters": True},
             "reasoning": {"effort": EFFORT, "exclude": True},
+            # Ask OpenRouter to report tokens and cost in the answer.
+            "usage": {"include": True},
         }
 
     async def _call(self, body: dict[str, Any]) -> tuple[str, str]:
         assert self._client is not None
+        started = time.monotonic()
         try:
             res = await self._client.post("/chat/completions", json=body)
         except (httpx.TimeoutException, httpx.TransportError) as exc:
             raise AgentError("Der Agent ist gerade nicht erreichbar.") from exc
+        finally:
+            elapsed = time.monotonic() - started
         if res.status_code == 429:
             raise AgentError("Der Agent ist gerade ausgelastet. Bitte gleich nochmal versuchen.")
         if res.status_code >= 400:
@@ -128,15 +134,16 @@ class TravelAgent:
             logger.error("OpenRouter answered %s: %s", res.status_code, res.text[:300])
             raise AgentError("Der Agent konnte die Anfrage nicht bearbeiten.")
         try:
-            choice = res.json()["choices"][0]
+            data = res.json()
+            if self._on_call is not None:
+                self._on_call(elapsed, data.get("usage") or {})
+            choice = data["choices"][0]
             return choice["message"].get("content") or "", choice.get("finish_reason") or ""
         except (ValueError, KeyError, IndexError, TypeError) as exc:
             logger.error("Unreadable OpenRouter answer: %s", res.text[:300])
             raise AgentError("Der Agent konnte die Anfrage nicht bearbeiten.") from exc
 
     async def _ask(self, prompt: str, model_cls: type) -> Any:
-        if self._spend is not None and not self._spend():
-            raise AgentError("Das Tageslimit für Anfragen ist erreicht. Morgen geht es weiter.")
         extra = ""
         for attempt in (1, 2):
             text, finish = await self._call(self._body(prompt, model_cls, extra))

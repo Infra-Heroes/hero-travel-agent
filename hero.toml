@@ -1,7 +1,5 @@
-# Urlaubs-Agent - one instance per person.
-#
-# A customer app on InfraHeroes has no login in front of it. The agent brings its own
-# password gate (app/auth.py) and serves nothing until AGENT_PASSWORD is set.
+# Urlaubs-Agent. The start page is public; the planner needs an account (e-mail address
+# and a one-time code, app/auth.py).
 [app]
 name = "urlaubs-agent"
 
@@ -10,9 +8,9 @@ cpu = 1
 memory_mb = 512
 port = 8080
 health_path = "/healthz"
-# One replica, no scale-to-zero: the saved trips live on a volume.
+# One replica, no scale-to-zero: users, trips and counters live on a volume.
 
-# The saved trips (SQLite). Create it once:
+# Create it once:
 #   heroctl volumes create urlaubs-data --size 1 --project urlaubs-agent
 [[volumes]]
 name = "urlaubs-data"
@@ -24,12 +22,24 @@ DATA_DIR = "/data"
 # DeepSeek V4 Flash on OpenRouter: cheap, long context, JSON-schema output.
 AGENT_MODEL = "deepseek/deepseek-v4-flash"
 AGENT_EFFORT = "medium"
-# Model calls per day; the agent stops asking when they are used up.
-AGENT_DAILY_CALLS = "30"
+# Requests per person and day, and for the whole agent: every request costs money.
+USER_DAILY_QUERIES = "10"
+AGENT_DAILY_CALLS = "200"
+# Optional: narrow who can sign up, comma separated. Empty means every address.
+ALLOWED_EMAILS = ""
+ALLOWED_EMAIL_DOMAINS = ""
+MAIL_FROM = "Urlaubs-Agent <agent@example.org>"
+SMTP_PORT = "587"
+
 # Secrets, set once per project (the values are never in this file):
-#   heroctl secrets set OPENROUTER_API_KEY --project urlaubs-agent
-#   heroctl secrets set AGENT_PASSWORD --project urlaubs-agent        (at least 8 characters)
-# Without a key (or with a value that is not an sk-or-... key) the agent runs in demo mode
-# (sample answers, no calls); without the password it serves nothing.
+#   OPENROUTER_API_KEY  the model; without an sk-or-... key the agent answers with samples
+#   SMTP_HOST, SMTP_USER, SMTP_PASSWORD   the mail server that sends the sign-in codes;
+#                       without SMTP_HOST nobody can sign in
+#   METRICS_TOKEN       bearer token Prometheus uses for /metrics (and /api/stats)
+#   SESSION_SECRET      signs the session cookies, 16+ random characters
 OPENROUTER_API_KEY = "secret:OPENROUTER_API_KEY"
-AGENT_PASSWORD = "secret:AGENT_PASSWORD"
+SMTP_HOST = "secret:SMTP_HOST"
+SMTP_USER = "secret:SMTP_USER"
+SMTP_PASSWORD = "secret:SMTP_PASSWORD"
+METRICS_TOKEN = "secret:METRICS_TOKEN"
+SESSION_SECRET = "secret:SESSION_SECRET"

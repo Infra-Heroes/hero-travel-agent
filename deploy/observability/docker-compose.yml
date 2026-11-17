@@ -1,0 +1,34 @@
+# The agent's surroundings on a laptop: a mail catcher (the sign-in mails arrive in its
+# web page), Prometheus scraping the agent, and Grafana with the dashboard provisioned.
+#
+#   docker compose -f deploy/observability/docker-compose.yml up -d
+#   AGENT: METRICS_TOKEN=local-metrics-token SMTP_HOST=localhost SMTP_PORT=1025 \
+#          .venv/bin/uvicorn app.main:app --port 8780
+#
+# Mail:        http://localhost:8025      Prometheus: http://localhost:9091
+# Grafana:     http://localhost:3001      (admin / admin)
+services:
+  mailpit:
+    image: axllent/mailpit:v1.21
+    ports: ["8025:8025", "1025:1025"]
+  prometheus:
+    image: prom/prometheus:v3.5.0
+    # Native on Apple silicon: the amd64 build crashes under emulation.
+    platform: linux/arm64
+    command: ["--config.file=/etc/prometheus/prometheus.yml", "--storage.tsdb.retention.time=30d"]
+    volumes: ["./prometheus.yml:/etc/prometheus/prometheus.yml:ro"]
+    ports: ["9091:9090"]
+    extra_hosts: ["host.docker.internal:host-gateway"]
+  grafana:
+    image: grafana/grafana:11.5.2
+    environment:
+      GF_SECURITY_ADMIN_PASSWORD: admin
+      GF_USERS_DEFAULT_THEME: light
+      # Local only: read access without signing in. Never expose this Grafana.
+      GF_AUTH_ANONYMOUS_ENABLED: "true"
+      GF_AUTH_ANONYMOUS_ORG_ROLE: Viewer
+    volumes:
+      - ./grafana/provisioning:/etc/grafana/provisioning:ro
+      - ./grafana/dashboards:/var/lib/grafana/dashboards:ro
+    ports: ["3001:3000"]
+    depends_on: [prometheus]

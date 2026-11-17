@@ -144,3 +144,6 @@ button.link { background: none; border: 0; padding: 0; color: var(--accent); tex
   body { background: #fff; color: #000; }
   .card { box-shadow: none; border: 0; }
 }
+
+.who { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; justify-content: flex-end; }
+.who .muted { color: var(--muted); font-size: 13px; }

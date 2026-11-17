@@ -1,16 +1,17 @@
-"""One password in front of the whole agent.
+"""Signing in with an e-mail address and a one-time code.
 
-A customer app on InfraHeroes has no login in front of it: the platform routes the
-address to the app and nothing else. This agent holds one person's saved trips and
-spends money on a model for every request, so it brings its own gate.
+Nobody has a password. A person types their address, gets a six digit code by mail,
+and types it back: that proves the address is theirs, and the address is the account.
 
-- AGENT_PASSWORD (a platform secret) is the password. Without it the agent refuses
-  to serve anything but /healthz: a missing secret must not mean "open".
-- A correct password sets a signed session cookie (HttpOnly, SameSite=Strict, Secure
-  behind https). The signing key is derived from the password, so changing the
-  password logs everybody out.
-- Wrong passwords are limited per client address and for everybody together, so
-  guessing is slow even if the address cannot be trusted.
+- Codes live 10 minutes, are stored only as a keyed hash, die after 5 wrong tries and
+  after one success.
+- The answer to "send me a code" is always the same, whether the address is known or not,
+  so the form cannot be used to find out who has an account.
+- Asking for codes and trying codes are limited per address, per client and in total,
+  so neither mail nor guessing can be run in bulk.
+- A session is a signed cookie (HttpOnly, SameSite=Strict, Secure behind https) that
+  names the user. The signing key is SESSION_SECRET, or a random key kept in the data
+  directory, so restarts do not log people out.
 """
 
 from __future__ import annotations
@@ -18,84 +19,124 @@ from __future__ import annotations
 import hashlib
 import hmac
 import os
+import re
+import secrets
 import time
 from collections import deque
-from html import escape
+from pathlib import Path
 
 from fastapi import Request
-from fastapi.responses import HTMLResponse, JSONResponse, RedirectResponse, Response
 
 COOKIE = "agent_session"
 SESSION_SECONDS = 14 * 24 * 3600
+CODE_SECONDS = 600
+EMAIL_RE = re.compile(r"^[A-Za-z0-9._%+\-]{1,64}@[A-Za-z0-9.\-]{1,190}\.[A-Za-z]{2,24}$")
 
-# Paths that never need a session: the health check, the login itself and the
-# static files the login page uses (they contain nothing private).
-OPEN_PATHS = ("/healthz", "/login")
-OPEN_PREFIXES = ("/static/",)
-
-# Failed logins: 5 per address and 20 in total per 10 minutes.
-WINDOW_SECONDS = 600
-PER_ADDRESS = 5
-IN_TOTAL = 20
+# Paths anybody may open: the public page, its files, the health check, the sign-in calls.
+OPEN_PATHS = ("/", "/healthz", "/metrics", "/robots.txt")
+OPEN_PREFIXES = ("/static/", "/api/auth/")
 
 
-class Gate:
-    def __init__(self, password: str | None = None, clock=time.time) -> None:
-        self._password = os.getenv("AGENT_PASSWORD", "") if password is None else password
+def normalize_email(raw: str) -> str | None:
+    email = raw.strip().lower()
+    return email if len(email) <= 254 and EMAIL_RE.match(email) else None
+
+
+class Limiter:
+    """N events per window for a key; the oldest fall out."""
+
+    def __init__(self, limit: int, window: int, clock=time.time) -> None:  # type: ignore[no-untyped-def]
+        self.limit, self.window, self.clock = limit, window, clock
+        self._events: dict[str, deque[float]] = {}
+
+    def _trim(self, key: str) -> deque[float]:
+        q = self._events.setdefault(key, deque())
+        horizon = self.clock() - self.window
+        while q and q[0] < horizon:
+            q.popleft()
+        if not q:
+            self._events.pop(key, None)
+            return self._events.setdefault(key, deque())
+        return q
+
+    def allow(self, key: str) -> bool:
+        """Count one event, or refuse it."""
+        q = self._trim(key)
+        if len(q) >= self.limit:
+            return False
+        q.append(self.clock())
+        return True
+
+    def blocked(self, key: str) -> bool:
+        return len(self._trim(key)) >= self.limit
+
+
+class Auth:
+    def __init__(self, data_dir: Path, clock=time.time) -> None:  # type: ignore[no-untyped-def]
         self._clock = clock
-        self._key = hashlib.sha256(b"urlaubs-agent-session\0" + self._password.encode()).digest()
-        self._failures: dict[str, deque[float]] = {}
-        self._all: deque[float] = deque()
+        self._key = self._load_key(data_dir)
+        # Codes asked for: 3 per address and 10 per client in 10 minutes, 200 an hour in total.
+        self.ask_email = Limiter(3, CODE_SECONDS, clock)
+        self.ask_client = Limiter(10, CODE_SECONDS, clock)
+        self.ask_total = Limiter(200, 3600, clock)
+        # Codes tried (wrong ones count): 20 per client in 10 minutes.
+        self.try_client = Limiter(20, CODE_SECONDS, clock)
+        allowed = os.getenv("ALLOWED_EMAILS", "")
+        self.allowed_emails = {e.strip().lower() for e in allowed.split(",") if e.strip()}
+        domains = os.getenv("ALLOWED_EMAIL_DOMAINS", "")
+        self.allowed_domains = {d.strip().lower().lstrip("@") for d in domains.split(",") if d.strip()}
 
-    @property
-    def configured(self) -> bool:
-        return len(self._password) >= 8
+    @staticmethod
+    def _load_key(data_dir: Path) -> bytes:
+        env = os.getenv("SESSION_SECRET", "")
+        if len(env) >= 16:
+            return hashlib.sha256(env.encode()).digest()
+        path = data_dir / "session.key"
+        data_dir.mkdir(parents=True, exist_ok=True)
+        if not path.exists():
+            path.write_bytes(secrets.token_bytes(32))
+            path.chmod(0o600)
+        return path.read_bytes()
+
+    # -- who may sign up -------------------------------------------------------
+
+    def allowed(self, email: str) -> bool:
+        """Open to every address, unless the operator narrowed it down."""
+        if not self.allowed_emails and not self.allowed_domains:
+            return True
+        return email in self.allowed_emails or email.rsplit("@", 1)[-1] in self.allowed_domains
+
+    # -- codes -----------------------------------------------------------------
+
+    def new_code(self) -> str:
+        return f"{secrets.randbelow(1_000_000):06d}"
+
+    def code_hash(self, email: str, code: str) -> str:
+        return hmac.new(self._key, f"code\0{email}\0{code}".encode(), hashlib.sha256).hexdigest()
+
+    def code_matches(self, email: str, code: str):  # type: ignore[no-untyped-def]
+        return lambda stored: hmac.compare_digest(stored, self.code_hash(email, code))
 
     # -- sessions --------------------------------------------------------------
 
-    def new_session(self) -> str:
+    def new_session(self, user_id: str) -> str:
         expires = int(self._clock()) + SESSION_SECONDS
-        return f"{expires}.{self._sign(str(expires))}"
+        body = f"{user_id}.{expires}"
+        return f"{body}.{self._sign(body)}"
 
-    def valid_session(self, value: str | None) -> bool:
-        if not self.configured or not value or "." not in value:
-            return False
-        expires, _, signature = value.partition(".")
+    def session_user(self, value: str | None) -> str | None:
+        """The user id in a valid, unexpired session cookie, else None."""
+        if not value or value.count(".") != 2:
+            return None
+        user_id, expires, signature = value.split(".")
         if not expires.isdigit() or int(expires) < self._clock():
-            return False
-        return hmac.compare_digest(signature, self._sign(expires))
+            return None
+        if not hmac.compare_digest(signature, self._sign(f"{user_id}.{expires}")):
+            return None
+        return user_id
 
     def _sign(self, message: str) -> str:
-        return hmac.new(self._key, message.encode(), hashlib.sha256).hexdigest()
-
-    # -- passwords -------------------------------------------------------------
-
-    def check_password(self, candidate: str) -> bool:
-        return self.configured and hmac.compare_digest(
-            hashlib.sha256(candidate.encode()).digest(), hashlib.sha256(self._password.encode()).digest()
-        )
-
-    def locked(self, address: str) -> bool:
-        now = self._clock()
-        self._trim(now)
-        return len(self._all) >= IN_TOTAL or len(self._failures.get(address, ())) >= PER_ADDRESS
-
-    def record_failure(self, address: str) -> None:
-        now = self._clock()
-        self._trim(now)
-        self._all.append(now)
-        self._failures.setdefault(address, deque()).append(now)
-
-    def _trim(self, now: float) -> None:
-        horizon = now - WINDOW_SECONDS
-        while self._all and self._all[0] < horizon:
-            self._all.popleft()
-        for address in list(self._failures):
-            q = self._failures[address]
-            while q and q[0] < horizon:
-                q.popleft()
-            if not q:
-                del self._failures[address]
+        return hmac.new(self._key, f"session\0{message}".encode(), hashlib.sha256).hexdigest()
 
 
 def client_address(request: Request) -> str:
@@ -104,37 +145,3 @@ def client_address(request: Request) -> str:
 
 def is_https(request: Request) -> bool:
     return request.url.scheme == "https" or request.headers.get("x-forwarded-proto") == "https"
-
-
-LOGIN_PAGE = """<!doctype html>
-<html lang="de"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
-<title>Urlaubs-Agent</title><link rel="stylesheet" href="/static/style.css"></head>
-<body><main style="max-width:22rem;margin:4rem auto;padding:0 1rem">
-<h1>Urlaubs-Agent</h1>
-{message}
-<form method="post" action="/login">
-<label for="password">Passwort</label>
-<input id="password" name="password" type="password" autocomplete="current-password" required autofocus>
-<button type="submit">Anmelden</button>
-</form></main></body></html>"""
-
-
-def login_page(message: str = "", status: int = 200) -> HTMLResponse:
-    note = f'<p role="alert">{escape(message)}</p>' if message else ""
-    return HTMLResponse(LOGIN_PAGE.replace("{message}", note), status_code=status)
-
-
-async def gate_middleware(request: Request, call_next, gate: Gate) -> Response:  # type: ignore[no-untyped-def]
-    path = request.url.path
-    if path in OPEN_PATHS or path.startswith(OPEN_PREFIXES):
-        return await call_next(request)
-    if not gate.configured:
-        # Fail closed: no password configured means nobody gets in.
-        return JSONResponse(
-            {"detail": "Der Agent ist nicht eingerichtet (AGENT_PASSWORD fehlt)."}, status_code=503
-        )
-    if gate.valid_session(request.cookies.get(COOKIE)):
-        return await call_next(request)
-    if path.startswith("/api/"):
-        return JSONResponse({"detail": "Bitte anmelden."}, status_code=401)
-    return RedirectResponse("/login", status_code=303)

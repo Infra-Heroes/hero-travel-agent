@@ -18,7 +18,7 @@ async function api(path, options = {}) {
     ...options,
   });
   if (res.status === 401) {
-    window.location.href = "/login";
+    window.location.href = "/";
     throw new Error("Bitte anmelden.");
   }
   if (res.status === 204) return null;
@@ -73,6 +73,8 @@ async function busy(button, label, fn) {
   } finally {
     button.disabled = false;
     button.textContent = old;
+    // Every request uses up one of today's: show what is left.
+    if (typeof showMe === "function") showMe();
   }
 }
 
@@ -280,3 +282,22 @@ async function loadTrips() {
 }
 
 api("/healthz").then((h) => ($("#demo").hidden = !h.demo)).catch(() => {});
+
+// Who is signed in, and how many requests are left today.
+async function showMe() {
+  try {
+    const me = await api("/api/me");
+    $("#me").textContent = me.email;
+    const quota = $("#quota");
+    quota.textContent = `Heute noch ${me.remaining} von ${me.limit} Anfragen`;
+    quota.hidden = false;
+  } catch {
+    /* api() already sent the page to the sign-in on a 401 */
+  }
+}
+showMe();
+
+$("#logout").addEventListener("click", async () => {
+  await fetch("/api/auth/logout", { method: "POST" });
+  window.location.href = "/";
+});

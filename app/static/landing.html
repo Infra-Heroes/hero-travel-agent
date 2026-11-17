@@ -1,0 +1,65 @@
+<!doctype html>
+<html lang="de">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Urlaubs-Agent: Reiseideen und Tagespläne</title>
+  <meta name="description" content="Der Urlaubs-Agent schlägt dir drei passende Reiseziele vor und plant die Tage. Er bucht nichts.">
+  <link rel="stylesheet" href="/static/style.css">
+  <link rel="stylesheet" href="/static/landing.css">
+</head>
+<body>
+  <header class="top">
+    <div class="brand">
+      <span class="logo" aria-hidden="true">✈</span>
+      <div>
+        <strong>Urlaubs-Agent</strong>
+        <small>Dein persönlicher Reiseplaner</small>
+      </div>
+    </div>
+    <a id="open-app" class="badge" href="/app" hidden>Zum Planer</a>
+  </header>
+
+  <main class="landing">
+    <section class="hero">
+      <h1>Wohin soll die Reise gehen?</h1>
+      <p class="lead">
+        Sag, wann du verreisen willst, mit wem und wie viel es kosten darf. Der Agent schlägt dir
+        drei passende Ziele vor, mit Wetter, Anreise, Unterkunft und einer Kostenschätzung. Für das
+        Ziel deiner Wahl plant er dir die Tage, bis zu zwei Wochen, samt Packliste und Kalenderdatei.
+      </p>
+      <ul class="points">
+        <li><strong>Ideen finden:</strong> drei Ziele mit ehrlichen Einschränkungen</li>
+        <li><strong>Tagesplan:</strong> Vormittag, Nachmittag, Abend, Essen und Plan B bei Regen</li>
+        <li><strong>Meine Reisen:</strong> Pläne speichern, drucken, in den Kalender übernehmen</li>
+      </ul>
+      <p class="fine">Der Agent bucht nichts und verspricht keine Verfügbarkeit. Preise sind Schätzungen.</p>
+    </section>
+
+    <section class="card signin" aria-labelledby="signin-title">
+      <h2 id="signin-title">Anmelden</h2>
+      <p class="muted">Ohne Passwort: Du bekommst einen Code per E-Mail.</p>
+
+      <form id="ask" novalidate>
+        <label for="email">E-Mail-Adresse</label>
+        <input id="email" name="email" type="email" autocomplete="email" inputmode="email" required>
+        <button type="submit" class="primary">Code senden</button>
+      </form>
+
+      <form id="enter" hidden novalidate>
+        <p id="sent" class="muted" role="status"></p>
+        <label for="code">Code aus der E-Mail</label>
+        <input id="code" name="code" type="text" inputmode="numeric" autocomplete="one-time-code"
+               pattern="[0-9]{6}" maxlength="6" required>
+        <button type="submit" class="primary">Anmelden</button>
+        <button type="button" id="again" class="link">Andere Adresse oder neuen Code</button>
+      </form>
+
+      <p id="message" role="alert" class="message" hidden></p>
+      <p class="fine">Mit der Anmeldung speichern wir deine E-Mail-Adresse, deine gespeicherten Reisen und wie oft du den Agenten nutzt. Mehr nicht.</p>
+    </section>
+  </main>
+
+  <script src="/static/landing.js" defer></script>
+</body>
+</html>
