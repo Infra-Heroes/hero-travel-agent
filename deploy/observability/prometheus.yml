@@ -1,0 +1,9 @@
+global:
+  scrape_interval: 15s
+scrape_configs:
+  - job_name: travel-agent
+    metrics_path: /metrics
+    authorization:
+      credentials: local-metrics-token   # METRICS_TOKEN of the agent; in production a secret file
+    static_configs:
+      - targets: ["host.docker.internal:8780"]

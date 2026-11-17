@@ -1,0 +1,25 @@
+.landing { display: grid; gap: 24px; padding-top: 24px; }
+@media (min-width: 860px) { .landing { grid-template-columns: 1.3fr 1fr; align-items: start; padding-top: 48px; } }
+.hero h1 { font-size: clamp(1.9rem, 4vw, 2.8rem); line-height: 1.15; margin: 0 0 12px; }
+.lead { font-size: 1.1rem; color: var(--muted); max-width: 40rem; }
+.points { padding-left: 1.1rem; margin: 20px 0; display: grid; gap: 8px; }
+.fine { color: var(--muted); font-size: 13px; }
+.signin h2 { margin-top: 0; }
+.signin form { display: grid; gap: 10px; margin-top: 12px; }
+.signin label { font-weight: 600; }
+.signin input {
+  width: 100%; padding: 12px 14px; font: inherit; color: var(--text);
+  background: var(--bg); border: 1px solid var(--line); border-radius: 10px;
+}
+.signin input:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
+#code { letter-spacing: .35em; font-size: 1.4rem; text-align: center; }
+.signin .primary {
+  background: var(--accent); color: var(--accent-ink); border: 0; padding: 12px 16px;
+  border-radius: 10px; font: inherit; font-weight: 700; cursor: pointer;
+}
+.signin .primary:disabled { opacity: .6; cursor: progress; }
+.message { padding: 10px 12px; border-radius: 10px; background: var(--accent-soft); color: var(--text); }
+.message.error { background: transparent; border: 1px solid var(--warn); color: var(--warn); }
+.muted { color: var(--muted); }
+
+[hidden] { display: none !important; }
