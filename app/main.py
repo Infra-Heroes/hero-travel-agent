@@ -32,6 +32,7 @@ from app.auth import (
     normalize_email,
 )
 from app.mailer import Mailer, MailError
+from app.mailtemplate import login_mail_html
 from app.metrics import CONTENT_TYPE, Metrics
 from app.schemas import DayPlan, DayPlanRequest, Suggestions, TripBrief
 from app.store import Store
@@ -185,6 +186,7 @@ async def request_code(body: CodeRequest, request: Request) -> JSONResponse:
             "Dein Code für den Urlaubs-Agent",
             f"Dein Code: {code}\n\nEr gilt 10 Minuten und nur einmal. "
             "Wenn du ihn nicht angefordert hast, kannst du diese Mail ignorieren.\n",
+            html=login_mail_html(code),
         )
     except MailError as exc:
         logger.error("could not send the sign-in mail: %s", exc)

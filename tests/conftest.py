@@ -41,8 +41,10 @@ class Harness:
     def last_code(self, to: str) -> str:
         for message in reversed(self.main.mailer.outbox):
             if message["To"] == to:
-                match = re.search(r"Dein Code: (\d{6})", message.get_content())
-                assert match, message.get_content()
+                match = re.search(
+                    r"Dein Code: (\d{6})", message.get_body(preferencelist=("plain",)).get_content()
+                )
+                assert match, message.get_body(preferencelist=("plain",)).get_content()
                 return match.group(1)
         raise AssertionError(f"no mail to {to}")
 

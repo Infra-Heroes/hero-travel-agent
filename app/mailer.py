@@ -38,7 +38,7 @@ class Mailer:
     def configured(self) -> bool:
         return self.backend in ("smtp", "console")
 
-    async def send(self, to: str, subject: str, body: str) -> None:
+    async def send(self, to: str, subject: str, body: str, html: str | None = None) -> None:
         if not self.configured:
             raise MailError("no mail backend configured (SMTP_HOST or MAIL_BACKEND=console)")
         message = EmailMessage()
@@ -46,6 +46,8 @@ class Mailer:
         message["To"] = to
         message["Subject"] = subject
         message.set_content(body)
+        if html:
+            message.add_alternative(html, subtype="html")
         if self.backend == "console":
             self.outbox.append(message)
             logger.info("mail to %s: %s | %s", to, subject, body.replace("\n", " "))

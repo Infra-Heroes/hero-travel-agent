@@ -80,6 +80,90 @@ async function busy(button, label, fn) {
 
 const eur = (n) => new Intl.NumberFormat("de-DE", { style: "currency", currency: "EUR", maximumFractionDigits: 0 }).format(n);
 
+// ── Autocomplete and help ────────────────────────────────────────────────────
+const MONTHS = ["Januar", "Februar", "März", "April", "Mai", "Juni", "Juli", "August", "September", "Oktober", "November", "Dezember"];
+function whenOptions() {
+  const now = new Date();
+  const out = ["Osterferien", "Pfingstferien", "Sommerferien", "Herbstferien", "Weihnachtsferien", "Wochenende", "Langes Wochenende"];
+  for (let i = 1; i <= 12; i++) {
+    const d = new Date(now.getFullYear(), now.getMonth() + i, 1);
+    out.push(`${MONTHS[d.getMonth()]} ${d.getFullYear()}`);
+  }
+  return out;
+}
+const ORIGINS = ["Frankfurt", "München", "Berlin", "Hamburg", "Köln/Bonn", "Düsseldorf", "Stuttgart", "Hannover", "Nürnberg", "Leipzig", "Dresden", "Bremen", "Dortmund", "Wien", "Zürich"];
+const DESTINATIONS = ["Lissabon, Portugal", "Porto, Portugal", "Algarve, Portugal", "Barcelona, Spanien", "Mallorca, Spanien", "Teneriffa, Spanien", "Valencia, Spanien", "Andalusien, Spanien", "Rom, Italien", "Sizilien, Italien", "Toskana, Italien", "Amalfiküste, Italien", "Kreta, Griechenland", "Athen, Griechenland", "Paris, Frankreich", "Provence, Frankreich", "Amsterdam, Niederlande", "Kopenhagen, Dänemark", "Wien, Österreich", "Prag, Tschechien", "Budapest, Ungarn", "Dubrovnik, Kroatien", "Istrien, Kroatien", "Malta", "Zypern", "Island", "Norwegen, Fjorde", "Schottland", "Irland", "Madeira, Portugal", "Marrakesch, Marokko", "Istanbul, Türkei"];
+const NOTE_IDEAS = [
+  "Mit Kleinkind, kurze Wege",
+  "Nicht zu weit fliegen",
+  "Ohne Mietwagen",
+  "Mit Hund",
+  "Barrierearm",
+  "Eher ruhig, wenig Touristen",
+  "Gutes Essen ist wichtig",
+  "Viel draußen, wenn möglich Wandern",
+  "Badewetter wichtig",
+  "Kulturprogramm bei Regen",
+  "Ankunft erst abends",
+  "Vegetarisch",
+];
+
+function fillList(id, values) {
+  const dl = document.getElementById(id);
+  for (const v of values) {
+    const o = document.createElement("option");
+    o.value = v;
+    dl.append(o);
+  }
+}
+fillList("dl-when", whenOptions());
+fillList("dl-origin", ORIGINS);
+fillList("dl-dest", DESTINATIONS);
+
+// Tap a suggestion to add it to "Sonstiges" (once, comma separated).
+document.querySelectorAll(".ideas").forEach((box) => {
+  const form = box.closest("form");
+  for (const text of NOTE_IDEAS) {
+    const b = document.createElement("button");
+    b.type = "button";
+    b.className = "idea";
+    b.textContent = "+ " + text;
+    b.addEventListener("click", () => {
+      const area = form.elements.notes;
+      const parts = area.value.split(/[,\n]/).map((x) => x.trim()).filter(Boolean);
+      if (!parts.includes(text)) parts.push(text);
+      area.value = parts.join(", ");
+      area.focus();
+    });
+    box.append(b);
+  }
+});
+
+function setChecked(form, names) {
+  form.querySelectorAll('input[name="interests"]').forEach((c) => (c.checked = names.includes(c.value)));
+}
+$("#example-brief").addEventListener("click", () => {
+  const f = $("#brief");
+  f.when.value = whenOptions()[0];
+  f.nights.value = 7;
+  f.budget_eur.value = 2500;
+  f.origin.value = "Frankfurt";
+  f.adults.value = 2;
+  f.children.value = 1;
+  setChecked(f, ["Strand", "Natur", "Familie"]);
+  f.notes.value = "Nicht zu weit fliegen, Kind 6 Jahre";
+});
+$("#example-plan").addEventListener("click", () => {
+  const f = $("#planform");
+  f.destination.value = "Lissabon, Portugal";
+  f.days.value = 4;
+  f.adults.value = 2;
+  f.children.value = 0;
+  f.pace.value = "ausgewogen";
+  setChecked(f, ["Kultur", "Essen", "Städte"]);
+  f.notes.value = "Ohne Mietwagen";
+});
+
 // ── Suggestions ──────────────────────────────────────────────────────────────
 let lastBrief = null;
 
@@ -160,6 +244,112 @@ function prefillPlan(destination) {
   form.scrollIntoView({ behavior: "smooth" });
 }
 
+// ── Exports: calendar, Google Calendar, PDF ─────────────────────────────────
+const pad = (n) => String(n).padStart(2, "0");
+const ymd = (d) => `${d.getFullYear()}${pad(d.getMonth() + 1)}${pad(d.getDate())}`;
+function dayDate(day) {
+  const d = new Date(`${day.date}T00:00:00`);
+  return Number.isNaN(d.getTime()) ? null : d;
+}
+const icsText = (t) => String(t).replace(/\\/g, "\\\\").replace(/;/g, "\;").replace(/,/g, "\\,").replace(/\r?\n/g, "\\n");
+function foldLine(line) {
+  // RFC 5545: at most 75 octets per line, continuation lines start with a space.
+  const out = [];
+  let rest = line;
+  while (rest.length > 70) {
+    out.push(rest.slice(0, 70));
+    rest = " " + rest.slice(70);
+  }
+  out.push(rest);
+  return out.join("\r\n");
+}
+
+/** Calendar file. timed=false: one all-day entry per day; true: morning, afternoon and evening. */
+function planToIcs(plan, { timed }) {
+  const lines = ["BEGIN:VCALENDAR", "VERSION:2.0", "PRODID:-//InfraHeroes//Urlaubs-Agent//DE", "CALSCALE:GREGORIAN"];
+  const stamp = new Date().toISOString().replace(/[-:]/g, "").slice(0, 15) + "Z";
+  const slots = [
+    ["Vormittag", "morning", "100000", "123000"],
+    ["Nachmittag", "afternoon", "140000", "180000"],
+    ["Abend", "evening", "190000", "220000"],
+  ];
+  for (const day of plan.days) {
+    const d = dayDate(day);
+    if (!d) continue;
+    const next = new Date(d.getTime() + 86400000);
+    const uid = `${ymd(d)}-${day.day}-${Math.abs([...plan.destination].reduce((a, c) => a * 31 + c.charCodeAt(0), 7) | 0)}@urlaubs-agent`;
+    const extra = `Essen: ${day.food_tip}\nBei Regen: ${day.bad_weather}\nWege: ${day.logistics}`;
+    if (!timed) {
+      lines.push(
+        "BEGIN:VEVENT", `UID:${uid}`, `DTSTAMP:${stamp}`, `DTSTART;VALUE=DATE:${ymd(d)}`, `DTEND;VALUE=DATE:${ymd(next)}`,
+        `SUMMARY:${icsText(`Tag ${day.day}: ${day.theme} (${plan.destination})`)}`,
+        `DESCRIPTION:${icsText(`Vormittag: ${day.morning}\nNachmittag: ${day.afternoon}\nAbend: ${day.evening}\n${extra}`)}`,
+        "END:VEVENT"
+      );
+    } else {
+      for (const [label, key, from, to] of slots) {
+        lines.push(
+          "BEGIN:VEVENT", `UID:${uid.replace("@", `-${key}@`)}`, `DTSTAMP:${stamp}`,
+          `DTSTART:${ymd(d)}T${from}`, `DTEND:${ymd(d)}T${to}`,
+          `SUMMARY:${icsText(`${label}: ${day[key].slice(0, 60)}`)}`,
+          `DESCRIPTION:${icsText(`Tag ${day.day} (${day.theme}, ${plan.destination})\n${day[key]}\n${extra}`)}`,
+          "END:VEVENT"
+        );
+      }
+    }
+  }
+  lines.push("END:VCALENDAR");
+  return lines.map(foldLine).join("\r\n") + "\r\n";
+}
+
+function download(name, text, type) {
+  const url = URL.createObjectURL(new Blob([text], { type }));
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = name;
+  document.body.append(a);
+  a.click();
+  a.remove();
+  setTimeout(() => URL.revokeObjectURL(url), 1000);
+}
+const slug = (t) => t.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "") || "reise";
+
+function googleLink(plan, day) {
+  const d = dayDate(day);
+  if (!d) return null;
+  const next = new Date(d.getTime() + 86400000);
+  const q = new URLSearchParams({
+    action: "TEMPLATE",
+    text: `Tag ${day.day}: ${day.theme} (${plan.destination})`,
+    dates: `${ymd(d)}/${ymd(next)}`,
+    details: `Vormittag: ${day.morning}\nNachmittag: ${day.afternoon}\nAbend: ${day.evening}\nEssen: ${day.food_tip}\nBei Regen: ${day.bad_weather}`,
+  });
+  return `https://calendar.google.com/calendar/render?${q}`;
+}
+
+function planTable(plan) {
+  const table = document.createElement("table");
+  table.className = "plan-table";
+  const cols = [["Tag", (d) => `${d.day}`], ["Datum", (d) => d.date], ["Thema", (d) => d.theme], ["Vormittag", (d) => d.morning], ["Nachmittag", (d) => d.afternoon], ["Abend", (d) => d.evening], ["Essen", (d) => d.food_tip], ["Bei Regen", (d) => d.bad_weather], ["Wege", (d) => d.logistics]];
+  const head = table.createTHead().insertRow();
+  for (const [name] of cols) {
+    const th = document.createElement("th");
+    th.textContent = name;
+    th.scope = "col";
+    head.append(th);
+  }
+  const body = table.createTBody();
+  for (const d of plan.days) {
+    const tr = body.insertRow();
+    for (const [name, get] of cols) {
+      const td = tr.insertCell();
+      td.textContent = get(d);
+      td.dataset.label = name;
+    }
+  }
+  return table;
+}
+
 // ── Day plan ─────────────────────────────────────────────────────────────────
 function renderPlan(plan, target, { tripId = null } = {}) {
   target.replaceChildren();
@@ -193,11 +383,79 @@ function renderPlan(plan, target, { tripId = null } = {}) {
     );
     actions.append(save);
   }
-  const print = document.createElement("button");
-  print.textContent = "Drucken";
-  print.addEventListener("click", () => window.print());
-  actions.append(print);
+  const view = document.createElement("button");
+  view.type = "button";
+  view.className = "ghost";
+  view.textContent = "Tabellenansicht";
+  actions.append(view);
+
+  const pdf = document.createElement("button");
+  pdf.type = "button";
+  pdf.textContent = "Als PDF speichern";
+  pdf.title = "Öffnet den Druckdialog: dort „Als PDF speichern“ wählen";
+  pdf.addEventListener("click", () => {
+    // The print stylesheet shows the plan only; the browser turns it into a PDF.
+    const old = document.title;
+    document.title = `Tagesplan ${plan.destination}`;
+    window.print();
+    document.title = old;
+  });
+  actions.append(pdf);
+
+  const cal = document.createElement("details");
+  cal.className = "menu";
+  const sum = document.createElement("summary");
+  sum.textContent = "In Kalender";
+  cal.append(sum);
+  const menu = document.createElement("div");
+  menu.className = "menu-body";
+  const mk = (label, fn) => {
+    const b = document.createElement("button");
+    b.type = "button";
+    b.className = "link";
+    b.textContent = label;
+    b.addEventListener("click", fn);
+    return b;
+  };
+  menu.append(
+    mk("Kalenderdatei (.ics), ganze Tage", () => download(`reise-${slug(plan.destination)}.ics`, planToIcs(plan, { timed: false }), "text/calendar")),
+    mk("Kalenderdatei (.ics), mit Uhrzeiten", () => download(`reise-${slug(plan.destination)}-zeiten.ics`, planToIcs(plan, { timed: true }), "text/calendar"))
+  );
+  const g = document.createElement("div");
+  g.className = "google";
+  const gl = document.createElement("span");
+  gl.className = "muted";
+  gl.textContent = "Google Kalender, pro Tag:";
+  g.append(gl);
+  for (const d of plan.days) {
+    const url = googleLink(plan, d);
+    if (!url) continue;
+    const a = document.createElement("a");
+    a.href = url;
+    a.target = "_blank";
+    a.rel = "noopener noreferrer";
+    a.textContent = `Tag ${d.day}`;
+    g.append(a);
+  }
+  if (g.children.length > 1) menu.append(g);
+  cal.append(menu);
+  actions.append(cal);
   wrap.append(h, ov, actions);
+
+  const days = document.createElement("div");
+  days.className = "days";
+  const tableBox = document.createElement("div");
+  tableBox.className = "table-box";
+  tableBox.hidden = true;
+  tableBox.append(planTable(plan));
+  view.addEventListener("click", () => {
+    const toTable = tableBox.hidden;
+    tableBox.hidden = !toTable;
+    days.hidden = toTable;
+    view.textContent = toTable ? "Kartenansicht" : "Tabellenansicht";
+    wrap.classList.toggle("as-table", toTable);
+  });
+  wrap.append(days, tableBox);
 
   for (const d of plan.days) {
     const node = $("#t-day").content.cloneNode(true);
@@ -210,7 +468,7 @@ function renderPlan(plan, target, { tripId = null } = {}) {
     $(".food", node).textContent = d.food_tip;
     $(".rain", node).textContent = d.bad_weather;
     $(".logistics", node).textContent = d.logistics;
-    wrap.append(node);
+    days.append(node);
   }
   const ph = document.createElement("h3");
   ph.textContent = "Packliste";

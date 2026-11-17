@@ -98,3 +98,19 @@ async def test_a_refusing_server_becomes_a_mail_error(smtp, monkeypatch):
     monkeypatch.setattr(FakeSMTP, "login", refuse)
     with pytest.raises(MailError):
         await Mailer().send("a@example.com", "Betreff", "Text")
+
+
+async def test_the_html_part_carries_the_code_and_the_text_part_stays():
+    from app.mailtemplate import login_mail_html
+
+    html = login_mail_html("123456")
+    assert all(d in html for d in "123456") and "10 Minuten" in html
+    assert "<script" not in html and "http://" not in html
+
+    mailer = Mailer()
+    mailer.backend = "console"
+    await mailer.send("a@example.com", "s", "Dein Code: 123456", html=html)
+    msg = mailer.outbox[0]
+    assert msg.is_multipart()
+    types = [p.get_content_type() for p in msg.iter_parts()]
+    assert types == ["text/plain", "text/html"]
