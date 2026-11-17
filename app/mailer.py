@@ -62,8 +62,12 @@ class Mailer:
         else:
             server = smtplib.SMTP(self.host, self.port, timeout=20)
         with server:
+            # EHLO first: the server's capabilities (STARTTLS) are only known after it, and
+            # a server such as IONOS offers AUTH only once the connection is encrypted.
+            server.ehlo()
             if self.port != 465 and server.has_extn("starttls"):
                 server.starttls(context=context)
+                server.ehlo()
             if self.user:
                 server.login(self.user, self.password)
             server.send_message(message)
