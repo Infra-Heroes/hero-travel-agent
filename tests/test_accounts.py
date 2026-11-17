@@ -305,7 +305,7 @@ def test_messages_and_mail_follow_the_chosen_language(harness):
 
 
 def test_the_agent_is_told_to_answer_in_english(harness):
-    from app.schemas import TripBrief  # noqa: PLC0415
+    from app.schemas import TripBrief
 
     brief = TripBrief(when="Mai", nights=3, budget_eur=500, adults=1, origin="Berlin", lang="en")
     assert "Englisch" in brief.as_prompt()
