@@ -28,7 +28,7 @@ AGENT_DAILY_CALLS = "200"
 # Optional: narrow who can sign up, comma separated. Empty means every address.
 ALLOWED_EMAILS = ""
 ALLOWED_EMAIL_DOMAINS = ""
-MAIL_FROM = "Urlaubs-Agent <agent@example.org>"
+MAIL_FROM = "Urlaubs-Agent <info@infra-heroes.de>"
 SMTP_PORT = "587"
 
 # Secrets, set once per project (the values are never in this file):
