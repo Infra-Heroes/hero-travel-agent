@@ -8,7 +8,7 @@
   var footer = document.createElement("footer");
   footer.className = "legal-footer";
   footer.innerHTML =
-    '<a href="/impressum">Impressum</a> · <a href="/datenschutz">Datenschutz</a>';
+    '<a href="/impressum">' + __("Impressum") + '</a> · <a href="/datenschutz">' + __("Datenschutz") + "</a>";
   document.body.appendChild(footer);
 
   var KEY = "cookie-notice-seen";
@@ -19,14 +19,14 @@
   var bar = document.createElement("div");
   bar.className = "notice-bar";
   bar.setAttribute("role", "region");
-  bar.setAttribute("aria-label", "Hinweis zu Cookies");
+  bar.setAttribute("aria-label", __("Hinweis zu Cookies"));
   bar.innerHTML =
-    "<span>Wir nutzen nur ein technisch notwendiges Cookie für deine Anmeldung. Kein Tracking, keine Werbung. " +
-    '<a href="/datenschutz">Datenschutz</a></span>';
+    "<span>" + __("Wir nutzen nur ein technisch notwendiges Cookie für deine Anmeldung. Kein Tracking, keine Werbung.") +
+    ' <a href="/datenschutz">' + __("Datenschutz") + "</a></span>";
   var ok = document.createElement("button");
   ok.type = "button";
   ok.className = "primary";
-  ok.textContent = "Verstanden";
+  ok.textContent = __("Verstanden");
   ok.addEventListener("click", function () {
     bar.hidden = true;
     try { window.localStorage.setItem(KEY, "1"); } catch (e) { /* hidden for this visit */ }

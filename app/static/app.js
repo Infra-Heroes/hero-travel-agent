@@ -1,7 +1,8 @@
 // Urlaubs-Agent page. Everything the model writes is set as textContent -
 // never as HTML - so a suggestion can never inject markup into the page.
 
-const INTERESTS = ["Strand", "Natur", "Wandern", "Kultur", "Städte", "Essen", "Familie", "Ruhe", "Abenteuer", "Wellness"];
+const INTERESTS_DE = ["Strand", "Natur", "Wandern", "Kultur", "Städte", "Essen", "Familie", "Ruhe", "Abenteuer", "Wellness"];
+const INTERESTS = INTERESTS_DE.map((x) => __(x));
 const $ = (sel, root = document) => root.querySelector(sel);
 
 function toast(msg) {
@@ -12,20 +13,22 @@ function toast(msg) {
   toast.t = setTimeout(() => (el.hidden = true), 3500);
 }
 
+const body401 = __("Anmelden");
+
 async function api(path, options = {}) {
   const res = await fetch(path, {
-    headers: { "Content-Type": "application/json", Accept: "application/json" },
+    headers: { "Content-Type": "application/json", Accept: "application/json", "X-Lang": window.I18N.lang },
     ...options,
   });
   if (res.status === 401) {
     window.location.href = "/";
-    throw new Error("Bitte anmelden.");
+    throw new Error(body401);
   }
   if (res.status === 204) return null;
   const body = await res.json().catch(() => ({}));
   if (!res.ok) {
-    const detail = Array.isArray(body.detail) ? "Bitte die Eingaben prüfen." : body.detail;
-    throw new Error(detail || `Fehler ${res.status}`);
+    const detail = Array.isArray(body.detail) ? __("Bitte die Eingabe prüfen.") : body.detail;
+    throw new Error(detail || `${__("Fehler")} ${res.status}`);
   }
   return body;
 }
@@ -58,6 +61,7 @@ function formData(form) {
     if (el.value === "") continue;
     data[el.name] = el.type === "number" ? Number(el.value) : el.value;
   }
+  data.lang = window.I18N.lang;
   data.interests = [...form.querySelectorAll('input[name="interests"]:checked')].map((c) => c.value);
   return data;
 }
@@ -78,22 +82,22 @@ async function busy(button, label, fn) {
   }
 }
 
-const eur = (n) => new Intl.NumberFormat("de-DE", { style: "currency", currency: "EUR", maximumFractionDigits: 0 }).format(n);
+const eur = (n) => new Intl.NumberFormat(window.I18N.lang === "en" ? "en-GB" : "de-DE", { style: "currency", currency: "EUR", maximumFractionDigits: 0 }).format(n);
 
 // ── Autocomplete and help ────────────────────────────────────────────────────
 const MONTHS = ["Januar", "Februar", "März", "April", "Mai", "Juni", "Juli", "August", "September", "Oktober", "November", "Dezember"];
 function whenOptions() {
   const now = new Date();
-  const out = ["Osterferien", "Pfingstferien", "Sommerferien", "Herbstferien", "Weihnachtsferien", "Wochenende", "Langes Wochenende"];
+  const out = ["Osterferien", "Pfingstferien", "Sommerferien", "Herbstferien", "Weihnachtsferien", "Wochenende", "Langes Wochenende"].map((x) => __(x));
   for (let i = 1; i <= 12; i++) {
     const d = new Date(now.getFullYear(), now.getMonth() + i, 1);
-    out.push(`${MONTHS[d.getMonth()]} ${d.getFullYear()}`);
+    out.push(`${__(MONTHS[d.getMonth()])} ${d.getFullYear()}`);
   }
   return out;
 }
 const ORIGINS = ["Frankfurt", "München", "Berlin", "Hamburg", "Köln/Bonn", "Düsseldorf", "Stuttgart", "Hannover", "Nürnberg", "Leipzig", "Dresden", "Bremen", "Dortmund", "Wien", "Zürich"];
 const DESTINATIONS = ["Lissabon, Portugal", "Porto, Portugal", "Algarve, Portugal", "Barcelona, Spanien", "Mallorca, Spanien", "Teneriffa, Spanien", "Valencia, Spanien", "Andalusien, Spanien", "Rom, Italien", "Sizilien, Italien", "Toskana, Italien", "Amalfiküste, Italien", "Kreta, Griechenland", "Athen, Griechenland", "Paris, Frankreich", "Provence, Frankreich", "Amsterdam, Niederlande", "Kopenhagen, Dänemark", "Wien, Österreich", "Prag, Tschechien", "Budapest, Ungarn", "Dubrovnik, Kroatien", "Istrien, Kroatien", "Malta", "Zypern", "Island", "Norwegen, Fjorde", "Schottland", "Irland", "Madeira, Portugal", "Marrakesch, Marokko", "Istanbul, Türkei"];
-const NOTE_IDEAS = [
+const NOTE_IDEAS_DE = [
   "Mit Kleinkind, kurze Wege",
   "Nicht zu weit fliegen",
   "Ohne Mietwagen",
@@ -107,6 +111,7 @@ const NOTE_IDEAS = [
   "Ankunft erst abends",
   "Vegetarisch",
 ];
+const NOTE_IDEAS = NOTE_IDEAS_DE.map((x) => __(x));
 
 function fillList(id, values) {
   const dl = document.getElementById(id);
@@ -151,17 +156,17 @@ $("#example-brief").addEventListener("click", () => {
   f.adults.value = 2;
   f.children.value = 1;
   setChecked(f, ["Strand", "Natur", "Familie"]);
-  f.notes.value = "Nicht zu weit fliegen, Kind 6 Jahre";
+  f.notes.value = __("Nicht zu weit fliegen, Kind 6 Jahre");
 });
 $("#example-plan").addEventListener("click", () => {
   const f = $("#planform");
-  f.destination.value = "Lissabon, Portugal";
+  f.destination.value = window.I18N.lang === "en" ? "Lisbon, Portugal" : "Lissabon, Portugal";
   f.days.value = 4;
   f.adults.value = 2;
   f.children.value = 0;
   f.pace.value = "ausgewogen";
   setChecked(f, ["Kultur", "Essen", "Städte"]);
-  f.notes.value = "Ohne Mietwagen";
+  f.notes.value = __("Ohne Mietwagen");
 });
 
 // ── Suggestions ──────────────────────────────────────────────────────────────
@@ -176,12 +181,12 @@ function renderSuggestions(data, target, { saveable = true } = {}) {
   head.append(p);
   if (saveable) {
     const save = document.createElement("button");
-    save.textContent = "Vorschläge merken";
+    save.textContent = __("Vorschläge merken");
     save.addEventListener("click", () =>
-      busy(save, "Speichere…", async () => {
-        const title = `Ideen: ${lastBrief?.when || "Reise"} (${data.suggestions.map((s) => s.destination.split(",")[0]).join(", ")})`;
+      busy(save, __("Speichere…"), async () => {
+        const title = `${__("Ideen")}: ${lastBrief?.when || __("Reise")} (${data.suggestions.map((s) => s.destination.split(",")[0]).join(", ")})`;
         await api("/api/trips", { method: "POST", body: JSON.stringify({ title, kind: "suggestions", payload: data }) });
-        toast("Gemerkt unter „Meine Reisen“");
+        toast(__("Gemerkt unter „Meine Reisen“"));
       })
     );
     head.append(save);
@@ -192,8 +197,9 @@ function renderSuggestions(data, target, { saveable = true } = {}) {
   list.className = "suggestions";
   for (const s of data.suggestions) {
     const node = $("#t-suggestion").content.cloneNode(true);
+    window.I18N.translate(node);
     $(".dest", node).textContent = s.destination;
-    $(".price", node).textContent = `ca. ${eur(s.total_estimate_eur)}`;
+    $(".price", node).textContent = `${__("ca.")} ${eur(s.total_estimate_eur)}`;
     $(".why", node).textContent = s.why_it_fits;
     $(".weather", node).textContent = s.weather;
     $(".getting", node).textContent = s.getting_there;
@@ -224,7 +230,7 @@ function renderSuggestions(data, target, { saveable = true } = {}) {
 $("#brief").addEventListener("submit", (e) => {
   e.preventDefault();
   const button = $("#brief button[type=submit]");
-  busy(button, "Der Agent plant…", async () => {
+  busy(button, __("Der Agent plant…"), async () => {
     lastBrief = formData(e.target);
     const data = await api("/api/suggest", { method: "POST", body: JSON.stringify(lastBrief) });
     renderSuggestions(data, $("#ideas-out"));
@@ -269,21 +275,21 @@ function planToIcs(plan, { timed }) {
   const lines = ["BEGIN:VCALENDAR", "VERSION:2.0", "PRODID:-//InfraHeroes//Urlaubs-Agent//DE", "CALSCALE:GREGORIAN"];
   const stamp = new Date().toISOString().replace(/[-:]/g, "").slice(0, 15) + "Z";
   const slots = [
-    ["Vormittag", "morning", "100000", "123000"],
-    ["Nachmittag", "afternoon", "140000", "180000"],
-    ["Abend", "evening", "190000", "220000"],
+    [__("Vormittag"), "morning", "100000", "123000"],
+    [__("Nachmittag"), "afternoon", "140000", "180000"],
+    [__("Abend"), "evening", "190000", "220000"],
   ];
   for (const day of plan.days) {
     const d = dayDate(day);
     if (!d) continue;
     const next = new Date(d.getTime() + 86400000);
     const uid = `${ymd(d)}-${day.day}-${Math.abs([...plan.destination].reduce((a, c) => a * 31 + c.charCodeAt(0), 7) | 0)}@urlaubs-agent`;
-    const extra = `Essen: ${day.food_tip}\nBei Regen: ${day.bad_weather}\nWege: ${day.logistics}`;
+    const extra = `${__("Essen:")} ${day.food_tip}\n${__("Bei Regen:")} ${day.bad_weather}\n${__("Wege:")} ${day.logistics}`;
     if (!timed) {
       lines.push(
         "BEGIN:VEVENT", `UID:${uid}`, `DTSTAMP:${stamp}`, `DTSTART;VALUE=DATE:${ymd(d)}`, `DTEND;VALUE=DATE:${ymd(next)}`,
-        `SUMMARY:${icsText(`Tag ${day.day}: ${day.theme} (${plan.destination})`)}`,
-        `DESCRIPTION:${icsText(`Vormittag: ${day.morning}\nNachmittag: ${day.afternoon}\nAbend: ${day.evening}\n${extra}`)}`,
+        `SUMMARY:${icsText(`${__("Tag")} ${day.day}: ${day.theme} (${plan.destination})`)}`,
+        `DESCRIPTION:${icsText(`${__("Vormittag")}: ${day.morning}\n${__("Nachmittag")}: ${day.afternoon}\n${__("Abend")}: ${day.evening}\n${extra}`)}`,
         "END:VEVENT"
       );
     } else {
@@ -292,7 +298,7 @@ function planToIcs(plan, { timed }) {
           "BEGIN:VEVENT", `UID:${uid.replace("@", `-${key}@`)}`, `DTSTAMP:${stamp}`,
           `DTSTART:${ymd(d)}T${from}`, `DTEND:${ymd(d)}T${to}`,
           `SUMMARY:${icsText(`${label}: ${day[key].slice(0, 60)}`)}`,
-          `DESCRIPTION:${icsText(`Tag ${day.day} (${day.theme}, ${plan.destination})\n${day[key]}\n${extra}`)}`,
+          `DESCRIPTION:${icsText(`${__("Tag")} ${day.day} (${day.theme}, ${plan.destination})\n${day[key]}\n${extra}`)}`,
           "END:VEVENT"
         );
       }
@@ -320,9 +326,9 @@ function googleLink(plan, day) {
   const next = new Date(d.getTime() + 86400000);
   const q = new URLSearchParams({
     action: "TEMPLATE",
-    text: `Tag ${day.day}: ${day.theme} (${plan.destination})`,
+    text: `${__("Tag")} ${day.day}: ${day.theme} (${plan.destination})`,
     dates: `${ymd(d)}/${ymd(next)}`,
-    details: `Vormittag: ${day.morning}\nNachmittag: ${day.afternoon}\nAbend: ${day.evening}\nEssen: ${day.food_tip}\nBei Regen: ${day.bad_weather}`,
+    details: `${__("Vormittag")}: ${day.morning}\n${__("Nachmittag")}: ${day.afternoon}\n${__("Abend")}: ${day.evening}\n${__("Essen:")} ${day.food_tip}\n${__("Bei Regen:")} ${day.bad_weather}`,
   });
   return `https://calendar.google.com/calendar/render?${q}`;
 }
@@ -330,7 +336,7 @@ function googleLink(plan, day) {
 function planTable(plan) {
   const table = document.createElement("table");
   table.className = "plan-table";
-  const cols = [["Tag", (d) => `${d.day}`], ["Datum", (d) => d.date], ["Thema", (d) => d.theme], ["Vormittag", (d) => d.morning], ["Nachmittag", (d) => d.afternoon], ["Abend", (d) => d.evening], ["Essen", (d) => d.food_tip], ["Bei Regen", (d) => d.bad_weather], ["Wege", (d) => d.logistics]];
+  const cols = [[__("Tag"), (d) => `${d.day}`], [__("Datum"), (d) => d.date], [__("Thema"), (d) => d.theme], [__("Vormittag"), (d) => d.morning], [__("Nachmittag"), (d) => d.afternoon], [__("Abend"), (d) => d.evening], [__("Essen"), (d) => d.food_tip], [__("Bei Regen:").replace(":", ""), (d) => d.bad_weather], [__("Wege:").replace(":", ""), (d) => d.logistics]];
   const head = table.createTHead().insertRow();
   for (const [name] of cols) {
     const th = document.createElement("th");
@@ -356,7 +362,7 @@ function renderPlan(plan, target, { tripId = null } = {}) {
   const wrap = document.createElement("div");
   wrap.className = "card plan";
   const h = document.createElement("h2");
-  h.textContent = `${plan.days.length} Tage ${plan.destination}`;
+  h.textContent = `${plan.days.length} ${__("Tage in")} ${plan.destination}`;
   const ov = document.createElement("p");
   ov.textContent = plan.overview;
   const actions = document.createElement("div");
@@ -366,18 +372,18 @@ function renderPlan(plan, target, { tripId = null } = {}) {
     const ics = document.createElement("a");
     ics.className = "button";
     ics.href = `/api/trips/${tripId}/calendar.ics`;
-    ics.textContent = "In Kalender übernehmen";
+    ics.textContent = __("In Kalender übernehmen");
     actions.append(ics);
   } else {
     const save = document.createElement("button");
-    save.textContent = "Plan merken";
+    save.textContent = __("Plan merken");
     save.addEventListener("click", () =>
-      busy(save, "Speichere…", async () => {
+      busy(save, __("Speichere…"), async () => {
         const trip = await api("/api/trips", {
           method: "POST",
-          body: JSON.stringify({ title: `Tagesplan: ${plan.destination}`, kind: "plan", payload: plan }),
+          body: JSON.stringify({ title: `${__("Tagesplan")}: ${plan.destination}`, kind: "plan", payload: plan }),
         });
-        toast("Gemerkt unter „Meine Reisen“");
+        toast(__("Gemerkt unter „Meine Reisen“"));
         renderPlan(plan, target, { tripId: trip.id });
       })
     );
@@ -386,17 +392,17 @@ function renderPlan(plan, target, { tripId = null } = {}) {
   const view = document.createElement("button");
   view.type = "button";
   view.className = "ghost";
-  view.textContent = "Tabellenansicht";
+  view.textContent = __("Tabellenansicht");
   actions.append(view);
 
   const pdf = document.createElement("button");
   pdf.type = "button";
-  pdf.textContent = "Als PDF speichern";
-  pdf.title = "Öffnet den Druckdialog: dort „Als PDF speichern“ wählen";
+  pdf.textContent = __("Als PDF speichern");
+  pdf.title = __("Öffnet den Druckdialog: dort „Als PDF speichern“ wählen");
   pdf.addEventListener("click", () => {
     // The print stylesheet shows the plan only; the browser turns it into a PDF.
     const old = document.title;
-    document.title = `Tagesplan ${plan.destination}`;
+    document.title = `${__("Tagesplan")} ${plan.destination}`;
     window.print();
     document.title = old;
   });
@@ -405,7 +411,7 @@ function renderPlan(plan, target, { tripId = null } = {}) {
   const cal = document.createElement("details");
   cal.className = "menu";
   const sum = document.createElement("summary");
-  sum.textContent = "In Kalender";
+  sum.textContent = __("In Kalender");
   cal.append(sum);
   const menu = document.createElement("div");
   menu.className = "menu-body";
@@ -418,14 +424,14 @@ function renderPlan(plan, target, { tripId = null } = {}) {
     return b;
   };
   menu.append(
-    mk("Kalenderdatei (.ics), ganze Tage", () => download(`reise-${slug(plan.destination)}.ics`, planToIcs(plan, { timed: false }), "text/calendar")),
-    mk("Kalenderdatei (.ics), mit Uhrzeiten", () => download(`reise-${slug(plan.destination)}-zeiten.ics`, planToIcs(plan, { timed: true }), "text/calendar"))
+    mk(__("Kalenderdatei (.ics), ganze Tage"), () => download(`reise-${slug(plan.destination)}.ics`, planToIcs(plan, { timed: false }), "text/calendar")),
+    mk(__("Kalenderdatei (.ics), mit Uhrzeiten"), () => download(`reise-${slug(plan.destination)}-zeiten.ics`, planToIcs(plan, { timed: true }), "text/calendar"))
   );
   const g = document.createElement("div");
   g.className = "google";
   const gl = document.createElement("span");
   gl.className = "muted";
-  gl.textContent = "Google Kalender, pro Tag:";
+  gl.textContent = __("Google Kalender, pro Tag:");
   g.append(gl);
   for (const d of plan.days) {
     const url = googleLink(plan, d);
@@ -434,7 +440,7 @@ function renderPlan(plan, target, { tripId = null } = {}) {
     a.href = url;
     a.target = "_blank";
     a.rel = "noopener noreferrer";
-    a.textContent = `Tag ${d.day}`;
+    a.textContent = `${__("Tag")} ${d.day}`;
     g.append(a);
   }
   if (g.children.length > 1) menu.append(g);
@@ -452,13 +458,14 @@ function renderPlan(plan, target, { tripId = null } = {}) {
     const toTable = tableBox.hidden;
     tableBox.hidden = !toTable;
     days.hidden = toTable;
-    view.textContent = toTable ? "Kartenansicht" : "Tabellenansicht";
+    view.textContent = toTable ? __("Kartenansicht") : __("Tabellenansicht");
     wrap.classList.toggle("as-table", toTable);
   });
   wrap.append(days, tableBox);
 
   for (const d of plan.days) {
     const node = $("#t-day").content.cloneNode(true);
+    window.I18N.translate(node);
     $(".num", node).textContent = d.day;
     $(".theme", node).textContent = d.theme;
     $(".date", node).textContent = d.date;
@@ -471,7 +478,7 @@ function renderPlan(plan, target, { tripId = null } = {}) {
     days.append(node);
   }
   const ph = document.createElement("h3");
-  ph.textContent = "Packliste";
+  ph.textContent = __("Packliste");
   const pl = document.createElement("ul");
   pl.className = "packing";
   for (const item of plan.packing_list) {
@@ -488,7 +495,7 @@ function renderPlan(plan, target, { tripId = null } = {}) {
 $("#planform").addEventListener("submit", (e) => {
   e.preventDefault();
   const button = $("#planform button[type=submit]");
-  busy(button, "Der Agent plant…", async () => {
+  busy(button, __("Der Agent plant…"), async () => {
     const plan = await api("/api/plan", { method: "POST", body: JSON.stringify(formData(e.target)) });
     renderPlan(plan, $("#plan-out"));
   });
@@ -503,7 +510,7 @@ async function loadTrips() {
     if (!trips.length) {
       const li = document.createElement("li");
       li.className = "muted";
-      li.textContent = "Noch nichts gemerkt.";
+      li.textContent = __("Noch nichts gemerkt.");
       ul.append(li);
       return;
     }
@@ -521,12 +528,12 @@ async function loadTrips() {
       });
       const meta = document.createElement("span");
       meta.className = "muted";
-      meta.textContent = new Date(t.created_at).toLocaleDateString("de-DE");
+      meta.textContent = new Date(t.created_at).toLocaleDateString(window.I18N.lang === "en" ? "en-GB" : "de-DE");
       const del = document.createElement("button");
       del.className = "ghost";
-      del.textContent = "Löschen";
+      del.textContent = __("Löschen");
       del.addEventListener("click", async () => {
-        if (!confirm("Diese Reise löschen?")) return;
+        if (!confirm(__("Diese Reise löschen?"))) return;
         await api(`/api/trips/${t.id}`, { method: "DELETE" });
         $("#trip-out").replaceChildren();
         loadTrips();
@@ -547,7 +554,7 @@ async function showMe() {
     const me = await api("/api/me");
     $("#me").textContent = me.email;
     const quota = $("#quota");
-    quota.textContent = `Heute noch ${me.remaining} von ${me.limit} Anfragen`;
+    quota.textContent = `${__("Heute noch")} ${me.remaining} ${__("von")} ${me.limit} ${__("Anfragen")}`;
     quota.hidden = false;
   } catch {
     /* api() already sent the page to the sign-in on a 401 */
@@ -556,10 +563,10 @@ async function showMe() {
 showMe();
 
 $("#delete-account").addEventListener("click", async () => {
-  if (!window.confirm("Konto und alle gespeicherten Reisen endgültig löschen?")) return;
+  if (!window.confirm(__("Konto und alle gespeicherten Reisen endgültig löschen?"))) return;
   const res = await fetch("/api/me", { method: "DELETE" });
   if (res.ok) window.location.href = "/";
-  else window.alert("Das Löschen hat nicht geklappt. Bitte versuche es erneut oder schreib an info@infra-heroes.de.");
+  else window.alert(__("Das Löschen hat nicht geklappt. Bitte versuche es erneut oder schreib an info@infra-heroes.de."));
 });
 
 $("#logout").addEventListener("click", async () => {

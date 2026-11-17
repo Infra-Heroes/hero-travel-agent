@@ -23,3 +23,9 @@
 .muted { color: var(--muted); }
 
 [hidden] { display: none !important; }
+
+@media (max-width: 859px) {
+  .landing { padding: 16px 16px calc(24px + env(safe-area-inset-bottom)); }
+  .hero h1 { font-size: 1.7rem; }
+  .lead { font-size: 1rem; }
+}

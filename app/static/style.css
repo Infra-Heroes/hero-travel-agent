@@ -176,3 +176,77 @@ button.idea:hover { border-color: var(--accent); color: var(--accent); }
 
 .who { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; justify-content: flex-end; }
 .who .muted { color: var(--muted); font-size: 13px; }
+
+/* M-bM-^TM-^@M-bM-^TM-^@ Language switch M-bM-^TM-^@M-bM-^TM-^@M-bM-^TM-^@M-bM-^TM-^@M-bM-^TM-^@M-bM-^TM-^@M-bM-^TM-^@M-bM-^TM-^@M-bM-^TM-^@M-bM-^TM-^@M-bM-^TM-^@M-bM-^TM-^@M-bM-^TM-^@M-bM-^TM-^@M-bM-^TM-^@M-bM-^TM-^@M-bM-^TM-^@M-bM-^TM-^@M-bM-^TM-^@M-bM-^TM-^@M-bM-^TM-^@M-bM-^TM-^@M-bM-^TM-^@M-bM-^TM-^@M-bM-^TM-^@M-bM-^TM-^@M-bM-^TM-^@M-bM-^TM-^@M-bM-^TM-^@M-bM-^TM-^@M-bM-^TM-^@M-bM-^TM-^@M-bM-^TM-^@M-bM-^TM-^@M-bM-^TM-^@M-bM-^TM-^@M-bM-^TM-^@M-bM-^TM-^@M-bM-^TM-^@M-bM-^TM-^@M-bM-^TM-^@M-bM-^TM-^@M-bM-^TM-^@M-bM-^TM-^@M-bM-^TM-^@M-bM-^TM-^@M-bM-^TM-^@M-bM-^TM-^@M-bM-^TM-^@M-bM-^TM-^@M-bM-^TM-^@M-bM-^TM-^@M-bM-^TM-^@M-bM-^TM-^@M-bM-^TM-^@ */
+.lang-switch { display: inline-flex; border: 1px solid var(--line); border-radius: 999px; overflow: hidden; background: var(--surface); }
+.lang-switch button { border: 0; border-radius: 0; padding: 6px 12px; font-size: 13px; font-weight: 700; background: transparent; color: var(--muted); min-height: 32px; }
+.lang-switch button[aria-pressed="true"] { background: var(--accent); color: var(--accent-ink); }
+.top .lang-switch { margin-left: auto; }
+
+/* M-bM-^TM-^@M-bM-^TM-^@ Phones and tablets M-bM-^TM-^@M-bM-^TM-^@M-bM-^TM-^@M-bM-^TM-^@M-bM-^TM-^@M-bM-^TM-^@M-bM-^TM-^@M-bM-^TM-^@M-bM-^TM-^@M-bM-^TM-^@M-bM-^TM-^@M-bM-^TM-^@M-bM-^TM-^@M-bM-^TM-^@M-bM-^TM-^@M-bM-^TM-^@M-bM-^TM-^@M-bM-^TM-^@M-bM-^TM-^@M-bM-^TM-^@M-bM-^TM-^@M-bM-^TM-^@M-bM-^TM-^@M-bM-^TM-^@M-bM-^TM-^@M-bM-^TM-^@M-bM-^TM-^@M-bM-^TM-^@M-bM-^TM-^@M-bM-^TM-^@M-bM-^TM-^@M-bM-^TM-^@M-bM-^TM-^@M-bM-^TM-^@M-bM-^TM-^@M-bM-^TM-^@M-bM-^TM-^@M-bM-^TM-^@M-bM-^TM-^@M-bM-^TM-^@M-bM-^TM-^@M-bM-^TM-^@M-bM-^TM-^@M-bM-^TM-^@M-bM-^TM-^@M-bM-^TM-^@M-bM-^TM-^@M-bM-^TM-^@M-bM-^TM-^@M-bM-^TM-^@M-bM-^TM-^@M-bM-^TM-^@ */
+html { -webkit-text-size-adjust: 100%; }
+body { padding-left: env(safe-area-inset-left); padding-right: env(safe-area-inset-right); }
+img, svg { max-width: 100%; }
+
+/* 16px inputs: iOS zooms the page on focus for anything smaller. */
+input, select, textarea { font-size: 16px; }
+
+/* Fingers, not mice: comfortable targets. */
+@media (pointer: coarse) {
+  button, .button, .tabs button, .menu > summary, input, select { min-height: 44px; }
+  button.link, button.idea { min-height: 40px; }
+  fieldset.chips label { min-height: 40px; padding: 8px 14px; }
+  .packing li { padding: 8px 0; }
+  .trips li { padding: 12px 0; }
+}
+
+/* Tablet */
+@media (max-width: 1024px) {
+  main, .top, .tabs { max-width: 100%; }
+  .suggestions { grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); }
+}
+
+/* Large phone and small tablet portrait */
+@media (max-width: 760px) {
+  .top { flex-wrap: wrap; padding-top: calc(12px + env(safe-area-inset-top)); }
+  .who { width: 100%; justify-content: space-between; }
+  .brand small { display: none; }
+  .tabs {
+    flex-wrap: nowrap; overflow-x: auto; scroll-snap-type: x proximity; -webkit-overflow-scrolling: touch;
+    position: sticky; top: 0; z-index: 4; background: var(--bg); padding-top: 8px; padding-bottom: 8px; margin-top: 0;
+  }
+  .tabs button { flex: 0 0 auto; scroll-snap-align: start; white-space: nowrap; }
+  .card { padding: 16px; border-radius: 12px; }
+  .grid { grid-template-columns: 1fr 1fr; }
+  .grid .wide { grid-column: 1 / -1; }
+  .actions > button, .actions > .button, .actions > .menu { flex: 1 1 auto; }
+  .actions .menu > summary { text-align: center; }
+  .menu-body { position: static; box-shadow: none; margin-top: 8px; min-width: 0; width: 100%; }
+  .menu { display: block; width: 100%; }
+  .packing { columns: 1; }
+  .result-head { align-items: flex-start; }
+  #toast { bottom: calc(20px + env(safe-area-inset-bottom)); }
+  .notice-bar { padding-bottom: calc(.75rem + env(safe-area-inset-bottom)); }
+}
+
+/* Small phones */
+@media (max-width: 480px) {
+  body { font-size: 16px; }
+  .grid { grid-template-columns: 1fr; }
+  .slots li, .facts div { grid-template-columns: 1fr; gap: 0; }
+  .signin { padding: 16px; }
+  h2 { font-size: 18px; }
+  .suggestion header { flex-direction: column; gap: 2px; }
+  .trips li .link { min-width: 100%; }
+  .legal { padding-left: 16px; padding-right: 16px; }
+}
+
+/* Wide tablets in landscape keep two columns for the forms */
+@media (min-width: 761px) and (max-width: 1024px) {
+  .grid { grid-template-columns: repeat(3, 1fr); }
+  .grid .wide { grid-column: span 3; }
+}
+
+.top { flex-wrap: wrap; }
+.top .who { flex: 1 1 auto; }
+.top .lang-switch { flex: 0 0 auto; }

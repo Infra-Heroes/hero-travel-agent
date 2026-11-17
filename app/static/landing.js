@@ -15,13 +15,13 @@ function say(text, isError = false) {
 async function post(path, body) {
   const res = await fetch(path, {
     method: "POST",
-    headers: { "Content-Type": "application/json", Accept: "application/json" },
-    body: JSON.stringify(body),
+    headers: { "Content-Type": "application/json", Accept: "application/json", "X-Lang": window.I18N.lang },
+    body: JSON.stringify({ ...body, lang: window.I18N.lang }),
   });
   const data = await res.json().catch(() => ({}));
   if (!res.ok) {
-    const detail = Array.isArray(data.detail) ? "Bitte die Eingabe prüfen." : data.detail;
-    throw new Error(detail || `Fehler ${res.status}`);
+    const detail = Array.isArray(data.detail) ? __("Bitte die Eingabe prüfen.") : data.detail;
+    throw new Error(detail || `${__("Fehler")} ${res.status}`);
   }
   return data;
 }
@@ -36,9 +36,9 @@ fetch("/api/me", { headers: { Accept: "application/json" } })
   .then((me) => {
     if (!me) return;
     $("#open-app").hidden = false;
-    $("#signin-title").textContent = "Du bist angemeldet";
+    $("#signin-title").textContent = __("Du bist angemeldet");
     ask.hidden = true;
-    say(`Angemeldet als ${me.email}. Heute noch ${me.remaining} von ${me.limit} Anfragen.`);
+    say(`${__("Angemeldet als")} ${me.email}. ${__("Heute noch")} ${me.remaining} ${__("von")} ${me.limit} ${__("Anfragen")}.`);
   })
   .catch(() => {});
 
@@ -46,14 +46,14 @@ ask.addEventListener("submit", async (event) => {
   event.preventDefault();
   say("");
   if (!$("#privacy").checked) {
-    say("Bitte bestätige, dass du die Datenschutzerklärung gelesen hast.", true);
+    say(__("Bitte bestätige, dass du die Datenschutzerklärung gelesen hast."), true);
     return;
   }
   busy(ask, true);
   try {
     const email = $("#email").value.trim();
     const answer = await post("/api/auth/request", { email });
-    $("#sent").textContent = `${answer.message} Adresse: ${email}`;
+    $("#sent").textContent = `${answer.message} ${__("Adresse")}: ${email}`;
     ask.hidden = true;
     enter.hidden = false;
     $("#code").focus();

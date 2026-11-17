@@ -20,3 +20,6 @@
 
 .consent { display: flex; gap: .5rem; align-items: flex-start; font-size: .9rem; margin: .5rem 0; }
 .consent input { margin-top: .25rem; width: auto; }
+
+/* One page, two languages: i18n.js sets <html lang>. */
+html[lang="en"] .l-de, html:not([lang="en"]) .l-en { display: none; }
