@@ -1,4 +1,7 @@
 # Urlaubs-Agent - one instance per person.
+#
+# A customer app on InfraHeroes has no login in front of it. The agent brings its own
+# password gate (app/auth.py) and serves nothing until AGENT_PASSWORD is set.
 [app]
 name = "urlaubs-agent"
 
@@ -7,14 +10,26 @@ cpu = 1
 memory_mb = 512
 port = 8080
 health_path = "/healthz"
-# Behind the platform login: the agent and its saved trips belong to one person.
-public = false
+# One replica, no scale-to-zero: the saved trips live on a volume.
+
+# The saved trips (SQLite). Create it once:
+#   heroctl volumes create urlaubs-data --size 1 --project urlaubs-agent
+[[volumes]]
+name = "urlaubs-data"
+mount = "/data"
 
 [env]
 LOG_LEVEL = "info"
 DATA_DIR = "/data"
-AGENT_MODEL = "claude-opus-5-5"
+# DeepSeek V4 Flash on OpenRouter: cheap, long context, JSON-schema output.
+AGENT_MODEL = "deepseek/deepseek-v4-flash"
 AGENT_EFFORT = "medium"
-# The API key is a secret, set per instance:
-#   heroctl secrets set ANTHROPIC_API_KEY --project urlaubs-agent
-# Without it the agent runs in demo mode (sample answers, no API calls).
+# Model calls per day; the agent stops asking when they are used up.
+AGENT_DAILY_CALLS = "30"
+# Secrets, set once per project (the values are never in this file):
+#   heroctl secrets set OPENROUTER_API_KEY --project urlaubs-agent
+#   heroctl secrets set AGENT_PASSWORD --project urlaubs-agent        (at least 8 characters)
+# Without the key the agent runs in demo mode (sample answers, no calls); without the
+# password it serves nothing.
+OPENROUTER_API_KEY = "secret:OPENROUTER_API_KEY"
+AGENT_PASSWORD = "secret:AGENT_PASSWORD"

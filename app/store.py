@@ -28,7 +28,28 @@ class TripStore:
                 created_at TEXT NOT NULL
             )"""
         )
+        # How many model calls were made per day: the agent's cost is the model's, and
+        # this is what keeps a loop or a leaked password from emptying the account.
+        self._db.execute("CREATE TABLE IF NOT EXISTS usage (day TEXT PRIMARY KEY, calls INTEGER NOT NULL)")
         self._db.commit()
+
+    def try_spend(self, limit: int, today: str | None = None) -> bool:
+        """Count one model call for today, or say the day's limit is used up.
+
+        The check and the increment are one statement, so two requests at once cannot
+        both take the last call."""
+        day = today or datetime.now(UTC).date().isoformat()
+        with self._db:
+            self._db.execute("INSERT OR IGNORE INTO usage (day, calls) VALUES (?, 0)", (day,))
+            cur = self._db.execute(
+                "UPDATE usage SET calls = calls + 1 WHERE day = ? AND calls < ?", (day, limit)
+            )
+            return cur.rowcount == 1
+
+    def calls_today(self, today: str | None = None) -> int:
+        day = today or datetime.now(UTC).date().isoformat()
+        row = self._db.execute("SELECT calls FROM usage WHERE day = ?", (day,)).fetchone()
+        return int(row["calls"]) if row else 0
 
     def save(self, title: str, kind: str, payload: dict[str, Any]) -> dict[str, Any]:
         trip = {
