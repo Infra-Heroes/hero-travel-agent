@@ -100,6 +100,20 @@ class Store:
             user = self._db.execute("SELECT * FROM users WHERE id = ?", (user_id,)).fetchone()
         return dict(user), created
 
+    def delete_user(self, user_id: str) -> bool:
+        """Erase the person: account, trips (cascade), usage and activity rows.
+
+        The agent-wide daily counter (`usage`) carries no user and stays."""
+        with self._lock, self._db:
+            row = self._db.execute("SELECT email FROM users WHERE id = ?", (user_id,)).fetchone()
+            if row is None:
+                return False
+            self._db.execute("DELETE FROM login_codes WHERE email = ?", (row["email"],))
+            self._db.execute("DELETE FROM user_usage WHERE user_id = ?", (user_id,))
+            self._db.execute("DELETE FROM activity WHERE user_id = ?", (user_id,))
+            self._db.execute("DELETE FROM users WHERE id = ?", (user_id,))
+        return True
+
     def user(self, user_id: str) -> dict[str, Any] | None:
         row = self._db.execute("SELECT * FROM users WHERE id = ?", (user_id,)).fetchone()
         return dict(row) if row else None

@@ -61,7 +61,7 @@ async def test_a_call_names_the_model_the_schema_and_sends_the_key(monkeypatch):
     assert body["model"] == "deepseek/deepseek-v4-flash"
     assert body["response_format"]["type"] == "json_schema"
     assert body["response_format"]["json_schema"]["strict"] is True
-    assert body["provider"] == {"require_parameters": True}
+    assert body["provider"] == {"require_parameters": True, "data_collection": "deny"}
     assert body["max_tokens"] == agent_module.MAX_TOKENS
     assert [m["role"] for m in body["messages"]] == ["system", "user"]
 

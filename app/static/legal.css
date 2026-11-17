@@ -1,0 +1,22 @@
+.legal { max-width: 46rem; margin: 0 auto; padding: 1.5rem 1rem 3rem; line-height: 1.6; }
+.legal h1 { margin-bottom: .25rem; }
+.legal h2 { margin-top: 2rem; font-size: 1.15rem; }
+.legal h3 { margin-top: 1.25rem; font-size: 1rem; }
+.legal address { font-style: normal; }
+.legal ul { padding-left: 1.25rem; }
+.brand { text-decoration: none; color: inherit; display: flex; gap: .5rem; align-items: center; }
+
+.legal-footer { text-align: center; padding: 1.5rem 1rem 2rem; font-size: .9rem; color: var(--muted); }
+.legal-footer a { color: inherit; }
+
+.notice-bar {
+  position: fixed; left: 0; right: 0; bottom: 0; z-index: 20;
+  display: flex; gap: .75rem; align-items: center; justify-content: center; flex-wrap: wrap;
+  padding: .75rem 1rem; background: var(--surface); border-top: 1px solid var(--line);
+  box-shadow: 0 -4px 16px rgba(16, 24, 40, .08); font-size: .9rem;
+}
+.notice-bar[hidden] { display: none; }
+.notice-bar button { padding: .4rem .9rem; }
+
+.consent { display: flex; gap: .5rem; align-items: flex-start; font-size: .9rem; margin: .5rem 0; }
+.consent input { margin-top: .25rem; width: auto; }

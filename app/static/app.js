@@ -297,6 +297,13 @@ async function showMe() {
 }
 showMe();
 
+$("#delete-account").addEventListener("click", async () => {
+  if (!window.confirm("Konto und alle gespeicherten Reisen endgültig löschen?")) return;
+  const res = await fetch("/api/me", { method: "DELETE" });
+  if (res.ok) window.location.href = "/";
+  else window.alert("Das Löschen hat nicht geklappt. Bitte versuche es erneut oder schreib an info@infra-heroes.de.");
+});
+
 $("#logout").addEventListener("click", async () => {
   await fetch("/api/auth/logout", { method: "POST" });
   window.location.href = "/";

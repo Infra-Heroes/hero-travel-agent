@@ -112,7 +112,7 @@ class TravelAgent:
                 "json_schema": {"name": "result", "strict": True, "schema": _schema(model_cls)},
             },
             # Only providers that really support the schema; others would answer in prose.
-            "provider": {"require_parameters": True},
+            "provider": {"require_parameters": True, "data_collection": "deny"},
             "reasoning": {"effort": EFFORT, "exclude": True},
             # Ask OpenRouter to report tokens and cost in the answer.
             "usage": {"include": True},

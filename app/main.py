@@ -125,6 +125,16 @@ async def stats(request: Request, days: int = 30) -> dict[str, Any]:
     return {"days": store.stats(max(1, min(days, 365))), "users": store.user_count()}
 
 
+@app.get("/impressum", include_in_schema=False)
+async def impressum() -> FileResponse:
+    return FileResponse(STATIC / "impressum.html", headers={"Cache-Control": "no-cache"})
+
+
+@app.get("/datenschutz", include_in_schema=False)
+async def datenschutz() -> FileResponse:
+    return FileResponse(STATIC / "datenschutz.html", headers={"Cache-Control": "no-cache"})
+
+
 @app.get("/robots.txt", include_in_schema=False)
 async def robots() -> Response:
     return Response("User-agent: *\nDisallow: /app\nDisallow: /api/\n", media_type="text/plain")
@@ -216,6 +226,16 @@ async def verify_code(body: CodeEntry, request: Request) -> JSONResponse:
 
 @app.post("/api/auth/logout")
 async def logout() -> JSONResponse:
+    response = JSONResponse({"ok": True})
+    response.delete_cookie(COOKIE)
+    return response
+
+
+@app.delete("/api/me")
+async def delete_me(request: Request) -> JSONResponse:
+    """Erase the account and everything stored for it (GDPR Art. 17)."""
+    user = current_user(request)
+    store.delete_user(user["id"])
     response = JSONResponse({"ok": True})
     response.delete_cookie(COOKIE)
     return response

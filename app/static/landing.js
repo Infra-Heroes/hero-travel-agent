@@ -45,6 +45,10 @@ fetch("/api/me", { headers: { Accept: "application/json" } })
 ask.addEventListener("submit", async (event) => {
   event.preventDefault();
   say("");
+  if (!$("#privacy").checked) {
+    say("Bitte bestätige, dass du die Datenschutzerklärung gelesen hast.", true);
+    return;
+  }
   busy(ask, true);
   try {
     const email = $("#email").value.trim();

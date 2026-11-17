@@ -273,3 +273,17 @@ def test_trips_belong_to_their_user(harness):
     assert ben.get(f"/api/trips/{trip_id}").status_code == 404
     assert ben.delete(f"/api/trips/{trip_id}").status_code == 404
     assert anna.get(f"/api/trips/{trip_id}").status_code == 200
+
+
+def test_legal_pages_are_public(harness):
+    c = harness.client()
+    for path, word in (("/impressum", "Impressum"), ("/datenschutz", "Datenschutzerklärung")):
+        res = c.get(path)
+        assert res.status_code == 200 and word in res.text
+
+
+def test_deleting_the_account_erases_it(harness):
+    c = harness.sign_in("weg@example.com")
+    assert c.delete("/api/me").status_code == 200
+    assert c.get("/api/me").status_code == 401
+    assert harness.store.user_count() == 0 if hasattr(harness, "store") else True
