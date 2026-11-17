@@ -133,3 +133,29 @@ async def test_the_model_call_reports_its_time_and_the_usage_openrouter_returned
     seconds, usage = seen[0]
     assert seconds >= 0
     assert usage == {"prompt_tokens": 120, "completion_tokens": 340, "cost": 0.0002}
+
+
+async def test_suggestions_run_without_thinking_and_plans_with_it(monkeypatch):
+    efforts = []
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        efforts.append(json.loads(request.content)["reasoning"])
+        return httpx.Response(200, json=completion(valid_answer()))
+
+    await make_agent(monkeypatch, handler).suggest(BRIEF)
+    assert efforts[0] == {"enabled": False}
+
+
+async def test_a_plan_with_the_wrong_number_of_days_is_asked_for_again(monkeypatch):
+    from app.schemas import DayPlanRequest
+
+    req = DayPlanRequest(destination="Lissabon", days=4)
+    full = agent_module.fake_day_plan(req)
+    short = full.model_copy(update={"days": full.days[:2]})
+    answers = [short.model_dump_json(), full.model_dump_json()]
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        return httpx.Response(200, json=completion(answers.pop(0)))
+
+    result = await make_agent(monkeypatch, handler).plan_days(req)
+    assert len(result.days) == 4 and not answers

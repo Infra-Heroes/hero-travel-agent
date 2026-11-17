@@ -29,7 +29,9 @@ logger = logging.getLogger("travel-agent")
 
 BASE_URL = os.getenv("OPENROUTER_BASE_URL", "https://openrouter.ai/api/v1")
 MODEL = os.getenv("AGENT_MODEL", "deepseek/deepseek-v4-flash")
-EFFORT = os.getenv("AGENT_EFFORT", "medium")  # low | medium | high
+EFFORT = os.getenv("AGENT_EFFORT", "medium")  # off | low | medium | high
+# Three ideas are a short, shallow answer: no thinking is about twice as fast and as good.
+EFFORT_SUGGEST = os.getenv("AGENT_EFFORT_SUGGEST", "off")
 MAX_TOKENS = int(os.getenv("AGENT_MAX_TOKENS", "8000"))
 TIMEOUT_SECONDS = float(os.getenv("AGENT_TIMEOUT_SECONDS", "120"))
 
@@ -44,6 +46,15 @@ Schätzungen in Euro für die genannte Personenzahl und werden als Schätzung ge
 Berücksichtige Reisezeit, typisches Wetter im Zeitraum, Budget, Mitreisende (z. B. Kinder)
 und die Vorlieben. Schreibe kurz, konkret und auf Deutsch. Erfinde keine Öffnungszeiten
 oder exakten Preise einzelner Orte; nenne bekannte, real existierende Orte."""
+
+
+def _reasoning(effort: str = "") -> dict[str, Any]:
+    """AGENT_EFFORT=off turns thinking off: the answer is a fill-in of a schema, which needs
+    little thought, and thinking is most of the waiting."""
+    effort = effort or EFFORT
+    if effort in ("off", "none"):
+        return {"enabled": False}
+    return {"effort": effort, "exclude": True}
 
 
 def _schema(model: type) -> dict[str, Any]:
@@ -99,7 +110,7 @@ class TravelAgent:
             )
         )
 
-    def _body(self, prompt: str, model_cls: type, extra: str = "") -> dict[str, Any]:
+    def _body(self, prompt: str, model_cls: type, extra: str = "", effort: str = "") -> dict[str, Any]:
         return {
             "model": MODEL,
             "max_tokens": MAX_TOKENS,
@@ -113,7 +124,7 @@ class TravelAgent:
             },
             # Only providers that really support the schema; others would answer in prose.
             "provider": {"require_parameters": True, "data_collection": "deny"},
-            "reasoning": {"effort": EFFORT, "exclude": True},
+            "reasoning": _reasoning(effort),
             # Ask OpenRouter to report tokens and cost in the answer.
             "usage": {"include": True},
         }
@@ -143,16 +154,19 @@ class TravelAgent:
             logger.error("Unreadable OpenRouter answer: %s", res.text[:300])
             raise AgentError("Der Agent konnte die Anfrage nicht bearbeiten.") from exc
 
-    async def _ask(self, prompt: str, model_cls: type) -> Any:
+    async def _ask(self, prompt: str, model_cls: type, effort: str = "", days: int = 0) -> Any:
         extra = ""
         for attempt in (1, 2):
-            text, finish = await self._call(self._body(prompt, model_cls, extra))
+            text, finish = await self._call(self._body(prompt, model_cls, extra, effort))
             if finish == "length":
                 raise AgentError("Der Plan wurde zu lang. Bitte weniger Tage oder weniger Details anfragen.")
             if finish == "content_filter":
                 raise AgentError("Zu dieser Anfrage kann der Agent keinen Vorschlag machen.")
             try:
-                return model_cls.model_validate(json.loads(text))
+                result = model_cls.model_validate(json.loads(text))
+                if days and len(result.days) != days:
+                    raise ValueError(f"{len(result.days)} days instead of {days}")
+                return result
             except (ValueError, ValidationError):
                 logger.warning("Model answer did not match the schema (attempt %s)", attempt)
                 extra = (
@@ -171,7 +185,7 @@ class TravelAgent:
             "eine Kostenschätzung nach Posten und eine ehrliche Einschränkung.\n\n"
             f"Wunsch:\n{brief.as_prompt()}"
         )
-        return await self._ask(prompt, Suggestions)
+        return await self._ask(prompt, Suggestions, EFFORT_SUGGEST)
 
     async def plan_days(self, req: DayPlanRequest) -> DayPlan:
         if self.fake:
@@ -182,10 +196,11 @@ class TravelAgent:
             "oder Aktivitäten mit kurzer Begründung), ein Essens-Tipp, eine Schlechtwetter-"
             "Alternative und ein realistischer Hinweis zu Wegen und Zeiten. Der erste und "
             "letzte Tag berücksichtigen An- und Abreise. Danach eine Packliste passend zu "
-            "Ziel, Jahreszeit und Mitreisenden.\n\n"
+            "Ziel, Jahreszeit und Mitreisenden. Fasse dich kurz: pro Tageszeit ein bis zwei Sätze, "
+            "alle anderen Felder höchstens ein Satz, die Packliste höchstens 15 Punkte.\n\n"
             f"Angaben:\n{req.as_prompt()}"
         )
-        return await self._ask(prompt, DayPlan)
+        return await self._ask(prompt, DayPlan, days=req.days)
 
 
 # ── Demo answers ──────────────────────────────────────────────────────────────
