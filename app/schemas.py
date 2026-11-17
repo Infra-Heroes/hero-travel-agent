@@ -6,6 +6,11 @@ from datetime import date
 
 from pydantic import BaseModel, Field
 
+LANGUAGE_NOTE = {
+    "de": "",
+    "en": "\nAntwortsprache: Englisch. Schreibe alle Texte auf Englisch (Orte behalten ihren üblichen Namen).",
+}
+
 # ── Requests ──────────────────────────────────────────────────────────────────
 
 
@@ -20,6 +25,7 @@ class TripBrief(BaseModel):
     origin: str = Field(min_length=2, max_length=60, description="Abreiseort")
     interests: list[str] = Field(default_factory=list, max_length=12)
     notes: str = Field(default="", max_length=1000)
+    lang: str = Field(default="de", pattern="^(de|en)$")
 
     def as_prompt(self) -> str:
         return (
@@ -29,6 +35,7 @@ class TripBrief(BaseModel):
             f"Abreise ab: {self.origin}\n"
             f"Vorlieben: {', '.join(self.interests) or 'keine Angabe'}\n"
             f"Sonstiges: {self.notes or '-'}"
+            f"{LANGUAGE_NOTE[self.lang]}"
         )
 
 
@@ -43,6 +50,7 @@ class DayPlanRequest(BaseModel):
     pace: str = Field(default="entspannt", pattern="^(entspannt|ausgewogen|aktiv)$")
     interests: list[str] = Field(default_factory=list, max_length=12)
     notes: str = Field(default="", max_length=1000)
+    lang: str = Field(default="de", pattern="^(de|en)$")
 
     def as_prompt(self) -> str:
         return (
@@ -52,6 +60,7 @@ class DayPlanRequest(BaseModel):
             f"Tempo: {self.pace}\n"
             f"Vorlieben: {', '.join(self.interests) or 'keine Angabe'}\n"
             f"Sonstiges: {self.notes or '-'}"
+            f"{LANGUAGE_NOTE[self.lang]}"
         )
 
 

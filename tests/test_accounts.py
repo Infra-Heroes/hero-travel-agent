@@ -287,3 +287,26 @@ def test_deleting_the_account_erases_it(harness):
     assert c.delete("/api/me").status_code == 200
     assert c.get("/api/me").status_code == 401
     assert harness.store.user_count() == 0 if hasattr(harness, "store") else True
+
+
+def test_messages_and_mail_follow_the_chosen_language(harness):
+    c = harness.client()
+    res = c.post("/api/auth/request", json={"email": "kein-mail", "lang": "en"})
+    assert res.status_code == 422 and "valid e-mail" in res.json()["detail"]
+    res = c.post("/api/auth/request", json={"email": "kein-mail"})
+    assert "E-Mail-Adresse" in res.json()["detail"]
+    assert "Please sign in" in c.get("/api/me", headers={"X-Lang": "en"}).json()["detail"]
+
+    c.post("/api/auth/request", json={"email": "en@example.com", "lang": "en"})
+    msg = harness.main.mailer.outbox[-1]
+    assert msg["Subject"].startswith("Your code")
+    html = msg.get_body(preferencelist=("html",)).get_content()
+    assert "Your sign-in code" in html and 'lang="en"' in html
+
+
+def test_the_agent_is_told_to_answer_in_english(harness):
+    from app.schemas import TripBrief  # noqa: PLC0415
+
+    brief = TripBrief(when="Mai", nights=3, budget_eur=500, adults=1, origin="Berlin", lang="en")
+    assert "Englisch" in brief.as_prompt()
+    assert "Englisch" not in brief.model_copy(update={"lang": "de"}).as_prompt()

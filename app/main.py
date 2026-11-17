@@ -36,6 +36,7 @@ from app.mailtemplate import login_mail_html
 from app.metrics import CONTENT_TYPE, Metrics
 from app.schemas import DayPlan, DayPlanRequest, Suggestions, TripBrief
 from app.store import Store
+from app.texts import lang_of, say
 
 logger = logging.getLogger("travel-agent")
 
@@ -85,7 +86,7 @@ def current_user(request: Request) -> dict[str, Any]:
     user_id = auth.session_user(request.cookies.get(COOKIE))
     user = store.user(user_id) if user_id else None
     if user is None:
-        raise HTTPException(401, "Bitte anmelden.")
+        raise HTTPException(401, say(request, "signin"))
     return user
 
 
@@ -99,9 +100,9 @@ def require_operator(request: Request) -> None:
     if METRICS_TOKEN:
         given = request.headers.get("authorization", "").removeprefix("Bearer ")
         if not hmac.compare_digest(given, METRICS_TOKEN):
-            raise HTTPException(401, "Nicht erlaubt.")
+            raise HTTPException(401, say(request, "forbidden"))
     elif not _is_loopback(request):
-        raise HTTPException(403, "Nicht erlaubt.")
+        raise HTTPException(403, say(request, "forbidden"))
 
 
 # -- public -------------------------------------------------------------------
@@ -151,6 +152,7 @@ async def landing() -> FileResponse:
 
 class CodeRequest(BaseModel):
     email: str = Field(max_length=254)
+    lang: str | None = Field(default=None, pattern="^(de|en)$")
 
 
 class CodeEntry(BaseModel):
@@ -158,7 +160,8 @@ class CodeEntry(BaseModel):
     code: str = Field(min_length=6, max_length=6, pattern=r"^\d{6}$")
 
 
-SENT = {"ok": True, "message": "Wenn die Adresse stimmt, ist ein Code unterwegs. Er gilt 10 Minuten."}
+def sent(request: Request, lang: str | None) -> JSONResponse:
+    return JSONResponse({"ok": True, "message": say(request, "sent", lang)})
 
 
 @app.post("/api/auth/request")
@@ -166,34 +169,33 @@ async def request_code(body: CodeRequest, request: Request) -> JSONResponse:
     email = normalize_email(body.email)
     if email is None:
         metrics.code_requests.labels("invalid").inc()
-        raise HTTPException(422, "Bitte eine gültige E-Mail-Adresse eingeben.")
+        raise HTTPException(422, say(request, "bad_email", body.lang))
     address = client_address(request)
     if not (auth.ask_client.allow(address) and auth.ask_total.allow("all") and auth.ask_email.allow(email)):
         metrics.code_requests.labels("limited").inc()
-        raise HTTPException(429, "Zu viele Anfragen. Bitte in einigen Minuten nochmal.")
+        raise HTTPException(429, say(request, "too_many_requests", body.lang))
     if not mailer.configured:
         logger.error("sign-in requested but no mail backend is configured")
-        raise HTTPException(503, "Die Anmeldung ist gerade nicht möglich.")
+        raise HTTPException(503, say(request, "signin_unavailable", body.lang))
     if not auth.allowed(email):
         # Same answer as for a known address: nobody learns who may sign up.
         metrics.code_requests.labels("not_allowed").inc()
-        return JSONResponse(SENT)
+        return sent(request, body.lang)
     code = auth.new_code()
     store.put_code(email, auth.code_hash(email, code), CODE_SECONDS)
     try:
         await mailer.send(
             email,
-            "Dein Code für den Urlaubs-Agent",
-            f"Dein Code: {code}\n\nEr gilt 10 Minuten und nur einmal. "
-            "Wenn du ihn nicht angefordert hast, kannst du diese Mail ignorieren.\n",
-            html=login_mail_html(code),
+            say(request, "mail_subject", body.lang),
+            say(request, "mail_text", body.lang, code=code),
+            html=login_mail_html(code, lang=lang_of(request, body.lang)),
         )
     except MailError as exc:
         logger.error("could not send the sign-in mail: %s", exc)
         metrics.code_requests.labels("mail_failed").inc()
-        raise HTTPException(503, "Die Anmeldung ist gerade nicht möglich.") from exc
+        raise HTTPException(503, say(request, "signin_unavailable", body.lang)) from exc
     metrics.code_requests.labels("sent").inc()
-    return JSONResponse(SENT)
+    return sent(request, body.lang)
 
 
 @app.post("/api/auth/verify")
@@ -201,15 +203,11 @@ async def verify_code(body: CodeEntry, request: Request) -> JSONResponse:
     email = normalize_email(body.email)
     if email is None or not auth.try_client.allow(client_address(request)):
         metrics.logins.labels("limited").inc()
-        raise HTTPException(429, "Zu viele Versuche. Bitte in einigen Minuten nochmal.")
+        raise HTTPException(429, say(request, "too_many_tries"))
     result = store.take_code(email, auth.code_matches(email, body.code))
     metrics.logins.labels(result).inc()
     if result != "ok":
-        message = (
-            "Der Code ist abgelaufen. Bitte einen neuen anfordern."
-            if result in ("expired", "none")
-            else ("Der Code stimmt nicht.")
-        )
+        message = say(request, "code_expired" if result in ("expired", "none") else "code_wrong")
         raise HTTPException(401, message)
     user, created = store.login(email)
     if created:
@@ -266,23 +264,21 @@ async def planner_page(request: Request) -> Response:
     return FileResponse(STATIC / "index.html", headers={"Cache-Control": "no-cache"})
 
 
-def _charge(user: dict[str, Any], kind: str) -> None:
+def _charge(request: Request, user: dict[str, Any], kind: str) -> None:
     """Take one request from the person's day and the agent's, or say which is used up."""
     result = store.try_spend(user["id"], USER_DAILY_QUERIES, AGENT_DAILY_CALLS)
     if result == "user":
         metrics.queries.labels(kind, "limited_user").inc()
-        raise HTTPException(
-            429, f"Du hast dein Tageslimit von {USER_DAILY_QUERIES} Anfragen erreicht. Morgen geht es weiter."
-        )
+        raise HTTPException(429, say(request, "user_limit", n=USER_DAILY_QUERIES))
     if result == "global":
         metrics.queries.labels(kind, "limited_global").inc()
-        raise HTTPException(503, "Der Agent ist für heute ausgelastet. Bitte morgen wieder versuchen.")
+        raise HTTPException(503, say(request, "agent_busy"))
 
 
 @app.post("/api/suggest", response_model=Suggestions)
 async def suggest(brief: TripBrief, request: Request) -> Suggestions:
     user = current_user(request)
-    _charge(user, "suggest")
+    _charge(request, user, "suggest")
     try:
         result = await agent.suggest(brief)
     except AgentError:
@@ -295,7 +291,7 @@ async def suggest(brief: TripBrief, request: Request) -> Suggestions:
 @app.post("/api/plan", response_model=DayPlan)
 async def plan(req: DayPlanRequest, request: Request) -> DayPlan:
     user = current_user(request)
-    _charge(user, "plan")
+    _charge(request, user, "plan")
     try:
         result = await agent.plan_days(req)
     except AgentError:
@@ -323,7 +319,7 @@ async def save_trip(body: SaveTrip, request: Request) -> dict[str, Any]:
     try:
         (Suggestions if body.kind == "suggestions" else DayPlan).model_validate(body.payload)
     except ValidationError as exc:
-        raise HTTPException(422, "Ungültiger Reiseplan") from exc
+        raise HTTPException(422, say(request, "bad_plan")) from exc
     return store.save(user["id"], body.title, body.kind, body.payload)
 
 
@@ -331,14 +327,14 @@ async def save_trip(body: SaveTrip, request: Request) -> dict[str, Any]:
 async def get_trip(trip_id: str, request: Request) -> dict[str, Any]:
     trip = store.get(current_user(request)["id"], trip_id)
     if trip is None:
-        raise HTTPException(404, "Reise nicht gefunden")
+        raise HTTPException(404, say(request, "no_trip"))
     return trip
 
 
 @app.delete("/api/trips/{trip_id}", status_code=204)
 async def delete_trip(trip_id: str, request: Request) -> Response:
     if not store.delete(current_user(request)["id"], trip_id):
-        raise HTTPException(404, "Reise nicht gefunden")
+        raise HTTPException(404, say(request, "no_trip"))
     return Response(status_code=204)
 
 
@@ -351,7 +347,7 @@ async def trip_calendar(trip_id: str, request: Request) -> Response:
     """The day plan as all-day calendar entries, one per day."""
     trip = store.get(current_user(request)["id"], trip_id)
     if trip is None or trip["kind"] != "plan":
-        raise HTTPException(404, "Kein Tagesplan gefunden")
+        raise HTTPException(404, say(request, "no_plan"))
     plan = DayPlan.model_validate(trip["payload"])
     lines = ["BEGIN:VCALENDAR", "VERSION:2.0", "PRODID:-//InfraHeroes//Urlaubs-Agent//DE"]
     for day in plan.days:
