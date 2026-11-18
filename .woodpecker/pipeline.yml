@@ -43,9 +43,9 @@ steps:
         from_secret: hero_token
     commands:
       - apk add --no-cache curl jq docker-cli
-      # The newest heroctl release; no token needed.
-      - TAG=$(curl -fsS https://codeberg.org/api/v1/repos/InfraHeroes/heroctl/releases/latest | jq -r .tag_name)
-      - curl -fsSL -o /usr/local/bin/heroctl "https://codeberg.org/InfraHeroes/heroctl/releases/download/$TAG/heroctl-linux-amd64"
+      # The newest heroctl release, from the website (Codeberg no longer resolves).
+      - TAG=$(curl -fsS https://infra-heroes.de/downloads/heroctl/latest)
+      - curl -fsSL -o /usr/local/bin/heroctl "https://infra-heroes.de/downloads/heroctl/$TAG/heroctl-linux-amd64"
       - chmod +x /usr/local/bin/heroctl
       - heroctl deploy --project urlaubs-agent --yes --token "$HERO_TOKEN"
     when:
