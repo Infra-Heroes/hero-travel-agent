@@ -39,8 +39,12 @@ steps:
       - /run/user/3002/podman/podman.sock:/var/run/docker.sock
     environment:
       HERO_API_URL: "https://api.infra-heroes.de"
+      # The app runs in the organisation "dominik", not InfraHeroes: a repo
+      # secret with a deploy token held to its project (heroctl tokens create
+      # --scope deploy --project urlaubs-agent, run in that organisation).
+      # The InfraHeroes org secret hero_token would deploy into the wrong org.
       HERO_TOKEN:
-        from_secret: hero_token
+        from_secret: hero_token_dominik
     commands:
       - apk add --no-cache curl jq docker-cli
       # The newest heroctl release, from the website (Codeberg no longer resolves).
