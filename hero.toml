@@ -2,11 +2,11 @@
 # and a one-time code, app/auth.py).
 [app]
 name = "urlaubs-agent"
-# Its own domain. DNS: urlaubs-planung.org A 188.245.42.166 (an apex cannot be
-# a CNAME), www CNAME ingress.infra-heroes.de, plus the two TXT records
-# heroctl prints (heroctl domains challenge). The urlaubs-agent.heroapp.run
-# address keeps working.
-custom_domains = ["urlaubs-planung.org", "www.urlaubs-planung.org"]
+# Its own domain, www only: no IP addresses in DNS, so no apex (an apex
+# cannot be a CNAME). DNS: www CNAME ingress.infra-heroes.de. plus the TXT
+# record heroctl prints (heroctl domains challenge). The
+# urlaubs-agent.heroapp.run address keeps working.
+custom_domains = ["www.urlaubs-planung.org"]
 verify_domains = true
 
 [deploy]
