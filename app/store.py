@@ -100,6 +100,9 @@ class Store:
                 """
             )
 
+    def close(self) -> None:
+        self._db.close()
+
     # -- users ---------------------------------------------------------------
 
     def login(self, email: str) -> tuple[dict[str, Any], bool]:
@@ -158,7 +161,7 @@ class Store:
                 (email, code_hash, expires),
             )
 
-    def take_code(self, email: str, matches) -> str:  # type: ignore[no-untyped-def]
+    def take_code(self, email: str, matches) -> str:
         """Check a code. Returns "ok" (the code is used up), "wrong", "expired" or "none".
 
         `matches(stored_hash)` does the comparison, so the secret stays in the auth
@@ -276,7 +279,7 @@ class Store:
             )
         return trip
 
-    def list(self, user_id: str) -> list[dict[str, Any]]:
+    def list_trips(self, user_id: str) -> list[dict[str, Any]]:
         rows = self._db.execute(
             "SELECT id, title, kind, created_at FROM trips WHERE user_id = ? ORDER BY created_at DESC",
             (user_id,),

@@ -55,12 +55,25 @@ class Harness:
         assert res.status_code == 200, res.text
         return client
 
+    def close(self) -> None:
+        self.main.store.close()
+
 
 @pytest.fixture
 def harness(monkeypatch):
-    return Harness(monkeypatch)
+    h = Harness(monkeypatch)
+    yield h
+    h.close()
 
 
 @pytest.fixture
 def make_harness(monkeypatch):
-    return lambda **env: Harness(monkeypatch, **env)
+    made: list[Harness] = []
+
+    def make(**env: str) -> Harness:
+        made.append(Harness(monkeypatch, **env))
+        return made[-1]
+
+    yield make
+    for h in made:
+        h.close()

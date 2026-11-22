@@ -33,7 +33,7 @@ def build_report(
     the morning, so the figures are complete)."""
     day = today or (datetime.now(UTC).date() - timedelta(days=1)).isoformat()
     rows = {r["day"]: r for r in store.stats(DAYS + 2)}
-    series = []
+    series: list[dict[str, Any]] = []
     for offset in range(DAYS):
         d = (datetime.fromisoformat(day) - timedelta(days=offset)).date().isoformat()
         r = rows.get(d, {})

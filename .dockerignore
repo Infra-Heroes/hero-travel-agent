@@ -1,0 +1,16 @@
+# Only what the image needs: pyproject.toml, app/ and docker-entrypoint.sh.
+.git
+.github
+.woodpecker
+.venv
+.env
+data
+tests
+docs
+deploy
+**/__pycache__
+.pytest_cache
+.ruff_cache
+.mypy_cache
+.coverage
+*.egg-info

@@ -36,7 +36,8 @@ def test_three_suggestions_with_a_cost_breakdown(client):
 
 
 @pytest.mark.parametrize(
-    "field,value", [("nights", 0), ("budget_eur", 10), ("adults", 0), ("when", ""), ("notes", "x" * 1001)]
+    ("field", "value"),
+    [("nights", 0), ("budget_eur", 10), ("adults", 0), ("when", ""), ("notes", "x" * 1001)],
 )
 def test_a_bad_brief_is_refused_before_the_agent_runs(client, field, value):
     assert client.post("/api/suggest", json={**BRIEF, field: value}).status_code == 422

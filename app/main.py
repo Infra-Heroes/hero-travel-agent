@@ -53,6 +53,10 @@ from app.schemas import (
 from app.store import Store
 from app.texts import lang_of, say
 
+logging.basicConfig(
+    level=os.getenv("LOG_LEVEL", "info").upper(),
+    format="%(asctime)s %(levelname)s %(name)s: %(message)s",
+)
 logger = logging.getLogger("travel-agent")
 
 DATA_DIR = Path(os.getenv("DATA_DIR", "./data"))
@@ -63,7 +67,7 @@ METRICS_TOKEN = os.getenv("METRICS_TOKEN", "")
 
 
 @contextlib.asynccontextmanager
-async def lifespan(_app: FastAPI):  # type: ignore[no-untyped-def]
+async def lifespan(_app: FastAPI):
     task = asyncio.create_task(report_loop(store, mailer, USER_DAILY_QUERIES, AGENT_DAILY_CALLS))
     try:
         yield
@@ -92,7 +96,7 @@ SHARE_DAYS_MAX = 90
 
 
 @app.middleware("http")
-async def security_headers(request, call_next):  # type: ignore[no-untyped-def]
+async def security_headers(request, call_next):
     response = await call_next(request)
     response.headers.setdefault("X-Content-Type-Options", "nosniff")
     response.headers.setdefault("X-Frame-Options", "DENY")
@@ -118,7 +122,7 @@ MAX_TRIPS_PER_USER = 100
 
 
 @app.middleware("http")
-async def limit_body_size(request, call_next):  # type: ignore[no-untyped-def]
+async def limit_body_size(request, call_next):
     """Refuse oversized requests before they are read: every legitimate body here is small."""
     length = request.headers.get("content-length", "")
     if length.isdigit() and int(length) > MAX_BODY_BYTES:
@@ -448,7 +452,7 @@ class SaveTrip(BaseModel):
 
 @app.get("/api/trips")
 async def list_trips(request: Request) -> dict[str, Any]:
-    return {"trips": store.list(current_user(request)["id"])}
+    return {"trips": store.list_trips(current_user(request)["id"])}
 
 
 @app.post("/api/trips", status_code=201)
@@ -459,7 +463,7 @@ async def save_trip(body: SaveTrip, request: Request) -> dict[str, Any]:
         (Suggestions if body.kind == "suggestions" else PlanResult).model_validate(body.payload)
     except ValidationError as exc:
         raise HTTPException(422, say(request, "bad_plan")) from exc
-    if len(store.list(user["id"])) >= MAX_TRIPS_PER_USER:
+    if len(store.list_trips(user["id"])) >= MAX_TRIPS_PER_USER:
         raise HTTPException(409, say(request, "too_many_trips", n=MAX_TRIPS_PER_USER))
     return store.save(user["id"], body.title, body.kind, body.payload)
 
