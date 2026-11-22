@@ -23,7 +23,7 @@ from zoneinfo import ZoneInfo
 import httpx
 from pydantic import ValidationError
 
-from app.schemas import DayPlan, DayPlanRequest, Suggestions, TripBrief
+from app.schemas import LANGUAGE_NOTE, Day, DayPlan, DayPlanRequest, RefineRequest, Suggestions, TripBrief
 
 logger = logging.getLogger("travel-agent")
 
@@ -34,6 +34,14 @@ EFFORT = os.getenv("AGENT_EFFORT", "medium")  # off | low | medium | high
 EFFORT_SUGGEST = os.getenv("AGENT_EFFORT_SUGGEST", "off")
 MAX_TOKENS = int(os.getenv("AGENT_MAX_TOKENS", "8000"))
 TIMEOUT_SECONDS = float(os.getenv("AGENT_TIMEOUT_SECONDS", "120"))
+
+
+PLACES_RULE = (
+    "Gib pro Tag in places die besuchten Orte an (je Ort: Name, Tageszeit morning/afternoon/"
+    "evening, Breiten- und Längengrad in Dezimalgrad), höchstens fünf, nur real existierende. "
+    "closed_on nur füllen, wenn der Ort an diesen Wochentagen sicher regelmäßig geschlossen ist, "
+    "sonst leer lassen."
+)
 
 
 class AgentError(Exception):
@@ -175,7 +183,8 @@ class TravelAgent:
                 )
         raise AgentError("Der Agent hat keine brauchbare Antwort geliefert. Bitte nochmal versuchen.")
 
-    async def suggest(self, brief: TripBrief) -> Suggestions:
+    async def suggest(self, brief: TripBrief, context: str = "") -> Suggestions:
+        """context: the profile and what the person liked before, as prompt text."""
         if self.fake:
             return fake_suggestions(brief)
         prompt = (
@@ -183,11 +192,12 @@ class TravelAgent:
             "Für jedes: warum es passt, typisches Wetter im Zeitraum, wie man hinkommt "
             "(mit geschätzter Reisezeit und Kosten), Unterkunftsart, 3-5 Highlights, "
             "eine Kostenschätzung nach Posten und eine ehrliche Einschränkung.\n\n"
-            f"Wunsch:\n{brief.as_prompt()}"
+            f"Wunsch:\n{brief.as_prompt()}{context}"
         )
         return await self._ask(prompt, Suggestions, EFFORT_SUGGEST)
 
-    async def plan_days(self, req: DayPlanRequest) -> DayPlan:
+    async def plan_days(self, req: DayPlanRequest, context: str = "") -> DayPlan:
+        """context: facts (weather, holidays) and the profile, as prompt text."""
         if self.fake:
             return fake_day_plan(req)
         prompt = (
@@ -197,10 +207,30 @@ class TravelAgent:
             "Alternative und ein realistischer Hinweis zu Wegen und Zeiten. Der erste und "
             "letzte Tag berücksichtigen An- und Abreise. Danach eine Packliste passend zu "
             "Ziel, Jahreszeit und Mitreisenden. Fasse dich kurz: pro Tageszeit ein bis zwei Sätze, "
-            "alle anderen Felder höchstens ein Satz, die Packliste höchstens 15 Punkte.\n\n"
-            f"Angaben:\n{req.as_prompt()}"
+            "alle anderen Felder höchstens ein Satz, die Packliste höchstens 15 Punkte. "
+            f"{PLACES_RULE}\n\n"
+            f"Angaben:\n{req.as_prompt()}{context}"
         )
         return await self._ask(prompt, DayPlan, days=req.days)
+
+    async def refine_day(self, req: RefineRequest, context: str = "") -> Day:
+        """One day anew, to a wish, with the rest of the plan as context."""
+        old = next(d for d in req.plan.days if d.day == req.day)
+        if self.fake:
+            return fake_refined_day(old, req.wish)
+        others = "\n".join(f"Tag {d.day} ({d.date}): {d.theme}" for d in req.plan.days if d.day != req.day)
+        prompt = (
+            f"Hier ist ein Tagesplan für {req.plan.destination}. Ändere nur Tag {req.day} nach "
+            f"diesem Wunsch: {req.wish}\n"
+            "Behalte Nummer und Datum des Tages, wiederhole nichts, was an anderen Tagen schon "
+            f"vorkommt, und halte die Form ein (pro Tageszeit ein bis zwei Sätze). {PLACES_RULE}\n\n"
+            f"Überblick: {req.plan.overview}\nAndere Tage:\n{others}\n\n"
+            f"Bisheriger Tag {req.day}:\n{old.model_dump_json(exclude={'places'})}\n"
+            f"Tempo: {req.pace}{LANGUAGE_NOTE[req.lang]}{context}"
+        )
+        day = await self._ask(prompt, Day)
+        day.day, day.date = old.day, old.date
+        return day
 
 
 # ── Demo answers ──────────────────────────────────────────────────────────────
@@ -277,6 +307,23 @@ def fake_day_plan(req: DayPlanRequest) -> DayPlan:
                 "food_tip": "Lokales Restaurant mit regionaler Küche",
                 "bad_weather": "Museum oder Café",
                 "logistics": "Alles zu Fuß oder mit kurzer Fahrt erreichbar.",
+                # Demo pins around Lisbon's centre; the check drops them elsewhere.
+                "places": [
+                    {
+                        "name": "Altstadt",
+                        "slot": "morning",
+                        "lat": 38.711 + i * 0.002,
+                        "lon": -9.133,
+                        "closed_on": [],
+                    },
+                    {
+                        "name": "Museum",
+                        "slot": "afternoon",
+                        "lat": 38.697,
+                        "lon": -9.206,
+                        "closed_on": ["Mo"],
+                    },
+                ],
             }
         )
     return DayPlan.model_validate(
@@ -287,3 +334,10 @@ def fake_day_plan(req: DayPlanRequest) -> DayPlan:
             "packing_list": ["Reisepass/Ausweis", "Ladekabel", "Sonnencreme", "Regenjacke", "Bequeme Schuhe"],
         }
     )
+
+
+def fake_refined_day(old: Day, wish: str) -> Day:
+    day = old.model_copy(deep=True)
+    day.theme = f"{old.theme} (angepasst)"
+    day.morning = f"Angepasst an: {wish}"
+    return day

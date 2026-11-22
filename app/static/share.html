@@ -1,0 +1,35 @@
+<!doctype html>
+<html lang="de">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="robots" content="noindex">
+  <script src="/static/i18n.js"></script>
+  <title>Geteilte Reise – Urlaubs-Agent</title>
+  <link rel="stylesheet" href="/static/style.css">
+  <link rel="stylesheet" href="/static/vendor/leaflet.css">
+</head>
+<body>
+  <header class="top">
+    <div class="brand">
+      <span class="logo" aria-hidden="true">✈</span>
+      <div>
+        <strong>Urlaubs-Agent</strong>
+        <small>Eine geteilte Reise · nur zum Ansehen</small>
+      </div>
+    </div>
+    <div class="who"><a class="button" href="/">Selbst planen</a></div>
+  </header>
+  <main>
+    <div class="card">
+      <h2 id="title">Geteilte Reise</h2>
+      <p id="note" class="muted"></p>
+      <div class="actions"><button type="button" id="print">Als PDF speichern</button></div>
+    </div>
+    <div id="out"></div>
+  </main>
+  <script src="/static/vendor/leaflet.js"></script>
+  <script src="/static/render.js"></script>
+  <script src="/static/share.js"></script>
+</body>
+</html>

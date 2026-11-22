@@ -14,6 +14,7 @@ import contextlib
 import hmac
 import logging
 import os
+import secrets
 from datetime import date, timedelta
 from pathlib import Path
 from typing import Any
@@ -33,11 +34,22 @@ from app.auth import (
     is_https,
     normalize_email,
 )
+from app.checks import check_plan
+from app.facts import FactFinder, facts_prompt
 from app.mailer import Mailer, MailError
 from app.mailtemplate import login_mail_html
 from app.metrics import CONTENT_TYPE, Metrics
 from app.report import report_loop, send_report
-from app.schemas import DayPlan, DayPlanRequest, Suggestions, TripBrief
+from app.schemas import (
+    DayPlan,
+    DayPlanRequest,
+    PlanResult,
+    Profile,
+    RefineRequest,
+    Suggestions,
+    TripBrief,
+    Vote,
+)
 from app.store import Store
 from app.texts import lang_of, say
 
@@ -74,6 +86,9 @@ def _record_call(seconds: float, usage: dict[str, Any]) -> None:
 
 
 agent = TravelAgent(on_call=_record_call)
+# The demo mode makes no network calls, so it looks nothing up either (FACTS=1 forces it).
+facts = FactFinder(enabled=os.getenv("FACTS", "1" if not agent.fake else "0") == "1")
+SHARE_DAYS_MAX = 90
 
 
 @app.middleware("http")
@@ -84,7 +99,8 @@ async def security_headers(request, call_next):  # type: ignore[no-untyped-def]
     response.headers.setdefault("Referrer-Policy", "strict-origin-when-cross-origin")
     response.headers.setdefault(
         "Content-Security-Policy",
-        "default-src 'self'; img-src 'self' data:; style-src 'self'; script-src 'self'; "
+        "default-src 'self'; img-src 'self' data: https://tile.openstreetmap.org; style-src 'self'; "
+        "script-src 'self'; "
         "frame-ancestors 'none'; base-uri 'self'; form-action 'self'; object-src 'none'",
     )
     response.headers.setdefault("Permissions-Policy", "camera=(), microphone=(), geolocation=(), payment=()")
@@ -331,7 +347,7 @@ async def suggest(brief: TripBrief, request: Request) -> Suggestions:
     user = current_user(request)
     _charge(request, user, "suggest")
     try:
-        result = await agent.suggest(brief)
+        result = await agent.suggest(brief, _suggest_context(user["id"]))
     except AgentError:
         metrics.queries.labels("suggest", "error").inc()
         raise
@@ -339,17 +355,89 @@ async def suggest(brief: TripBrief, request: Request) -> Suggestions:
     return result
 
 
-@app.post("/api/plan", response_model=DayPlan)
-async def plan(req: DayPlanRequest, request: Request) -> DayPlan:
+def _profile(user_id: str) -> Profile:
+    data = store.profile(user_id)
+    try:
+        return Profile.model_validate(data) if data else Profile()
+    except ValidationError:
+        return Profile()
+
+
+def _suggest_context(user_id: str) -> str:
+    """The profile and the person's earlier votes, for the model."""
+    text = _profile(user_id).as_prompt()
+    votes = store.votes(user_id)
+    if votes["liked"]:
+        text += "\nFrüher gefallen (ähnliche Ideen sind willkommen): " + "; ".join(votes["liked"])
+    if votes["disliked"]:
+        text += "\nFrüher nicht gefallen (nicht erneut vorschlagen): " + "; ".join(votes["disliked"])
+    return text
+
+
+@app.post("/api/plan", response_model=PlanResult)
+async def plan(req: DayPlanRequest, request: Request) -> PlanResult:
     user = current_user(request)
     _charge(request, user, "plan")
+    found = await facts.for_plan(req.destination, req.start_date, req.days, req.lang)
     try:
-        result = await agent.plan_days(req)
+        result = await agent.plan_days(req, facts_prompt(found) + _profile(user["id"]).as_prompt())
     except AgentError:
         metrics.queries.labels("plan", "error").inc()
         raise
     metrics.queries.labels("plan", "ok").inc()
+    return check_plan(result, found, req.pace, req.lang)
+
+
+@app.post("/api/plan/refine", response_model=PlanResult)
+async def refine(req: RefineRequest, request: Request) -> PlanResult:
+    """One day anew, the other days and the facts stay as they are."""
+    user = current_user(request)
+    if not any(d.day == req.day for d in req.plan.days):
+        raise HTTPException(422, say(request, "bad_plan"))
+    if req.trip_id and store.get(user["id"], req.trip_id) is None:
+        raise HTTPException(404, say(request, "no_trip"))
+    _charge(request, user, "refine")
+    try:
+        day = await agent.refine_day(req, _profile(user["id"]).as_prompt())
+    except AgentError:
+        metrics.queries.labels("refine", "error").inc()
+        raise
+    metrics.queries.labels("refine", "ok").inc()
+    plan_ = DayPlan.model_validate(req.plan.model_dump())
+    plan_.days = [day if d.day == req.day else d for d in plan_.days]
+    result = check_plan(plan_, req.plan.facts, req.pace, req.lang)
+    if req.trip_id:
+        store.update_payload(user["id"], req.trip_id, result.model_dump())
     return result
+
+
+# -- profile and votes ------------------------------------------------------------
+
+
+@app.get("/api/profile")
+async def get_profile(request: Request) -> dict[str, Any]:
+    user = current_user(request)
+    return {"profile": _profile(user["id"]).model_dump(), "saved": store.profile(user["id"]) is not None}
+
+
+@app.put("/api/profile")
+async def put_profile(body: Profile, request: Request) -> dict[str, Any]:
+    user = current_user(request)
+    store.set_profile(user["id"], body.model_dump())
+    return {"profile": body.model_dump(), "saved": True}
+
+
+@app.get("/api/votes")
+async def get_votes(request: Request) -> dict[str, Any]:
+    return store.votes(current_user(request)["id"], limit=100)
+
+
+@app.post("/api/votes")
+async def post_vote(body: Vote, request: Request) -> dict[str, Any]:
+    user = current_user(request)
+    store.vote(user["id"], body.destination.strip(), body.vote)
+    metrics.votes.labels({1: "up", -1: "down", 0: "cleared"}[body.vote]).inc()
+    return {"ok": True}
 
 
 class SaveTrip(BaseModel):
@@ -368,7 +456,7 @@ async def save_trip(body: SaveTrip, request: Request) -> dict[str, Any]:
     user = current_user(request)
     # Validate what is stored against the shape the page will render.
     try:
-        (Suggestions if body.kind == "suggestions" else DayPlan).model_validate(body.payload)
+        (Suggestions if body.kind == "suggestions" else PlanResult).model_validate(body.payload)
     except ValidationError as exc:
         raise HTTPException(422, say(request, "bad_plan")) from exc
     if len(store.list(user["id"])) >= MAX_TRIPS_PER_USER:
@@ -378,9 +466,47 @@ async def save_trip(body: SaveTrip, request: Request) -> dict[str, Any]:
 
 @app.get("/api/trips/{trip_id}")
 async def get_trip(trip_id: str, request: Request) -> dict[str, Any]:
-    trip = store.get(current_user(request)["id"], trip_id)
+    user = current_user(request)
+    trip = store.get(user["id"], trip_id)
     if trip is None:
         raise HTTPException(404, say(request, "no_trip"))
+    trip["share"] = store.share_of(user["id"], trip_id)
+    return trip
+
+
+class ShareIn(BaseModel):
+    days: int = Field(default=30, ge=1, le=SHARE_DAYS_MAX)
+
+
+@app.post("/api/trips/{trip_id}/share", status_code=201)
+async def share_trip(trip_id: str, body: ShareIn, request: Request) -> dict[str, Any]:
+    """A read-only link for people without an account. Sharing again makes a new link."""
+    out = store.share(current_user(request)["id"], trip_id, secrets.token_urlsafe(18), body.days)
+    if out is None:
+        raise HTTPException(404, say(request, "no_trip"))
+    return out
+
+
+@app.delete("/api/trips/{trip_id}/share", status_code=204)
+async def unshare_trip(trip_id: str, request: Request) -> Response:
+    store.unshare(current_user(request)["id"], trip_id)
+    return Response(status_code=204)
+
+
+@app.get("/s/{token}", include_in_schema=False)
+async def shared_page(token: str) -> Response:
+    # strict-origin: the map tiles need a referrer, the token in the path must not leak.
+    return FileResponse(
+        STATIC / "share.html",
+        headers={"Cache-Control": "no-cache", "X-Robots-Tag": "noindex", "Referrer-Policy": "strict-origin"},
+    )
+
+
+@app.get("/api/shared/{token}")
+async def shared_trip(token: str, request: Request) -> dict[str, Any]:
+    trip = store.shared(token) if len(token) <= 64 else None
+    if trip is None:
+        raise HTTPException(404, say(request, "share_gone"))
     return trip
 
 

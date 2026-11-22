@@ -255,3 +255,31 @@ input, select, textarea { font-size: 16px; }
 .progress::before { content: ""; width: 14px; height: 14px; border: 2px solid var(--accent); border-right-color: transparent; border-radius: 50%; animation: spin .8s linear infinite; flex: none; }
 @keyframes spin { to { transform: rotate(360deg); } }
 @media (prefers-reduced-motion: reduce) { .progress::before { animation: none; } }
+
+/* Facts, map, checks, votes, refine, share */
+.facts-box { margin: 12px 0; padding: 10px 14px; border: 1px solid var(--line); border-radius: 10px; background: var(--accent-soft); }
+.facts-box h3 { margin: 0 0 6px; font-size: 15px; }
+.facts-box p, .facts-box ul { margin: 4px 0; font-size: 14px; }
+.facts-box ul { padding-left: 18px; }
+.map-box { margin: 12px 0; }
+.map img { max-width: none !important; }
+.map { height: 340px; border-radius: 10px; border: 1px solid var(--line); margin: 6px 0 4px; }
+.map-days { display: flex; flex-wrap: wrap; gap: 6px; }
+button.chip-btn { background: var(--surface); border: 1px solid var(--line); color: var(--text); border-radius: 999px; padding: 3px 10px; font-size: 13px; }
+button.chip-btn[aria-pressed="true"] { border-color: var(--accent); color: var(--accent); font-weight: 600; }
+.checks { list-style: none; padding: 0; margin: 8px 0 0; }
+.check { font-size: 13px; padding: 4px 8px; border-radius: 8px; margin: 4px 0; }
+.check.warn { color: var(--warn); border: 1px solid currentColor; }
+.check.info { color: var(--muted); border: 1px dashed var(--line); }
+.check.summary { display: inline-block; }
+.votes { display: inline-flex; gap: 4px; margin-right: auto; }
+button.vote { background: var(--surface); border: 1px solid var(--line); border-radius: 999px; padding: 2px 10px; font-size: 16px; line-height: 1.4; }
+button.vote[aria-pressed="true"] { border-color: var(--accent); background: var(--accent-soft); }
+.refine { margin-top: 8px; font-size: 14px; }
+.refine summary { cursor: pointer; color: var(--accent); font-weight: 600; }
+.refine form { margin-top: 6px; }
+.share .menu-body { display: flex; flex-direction: column; gap: 6px; min-width: min(300px, 80vw); }
+.share input[readonly] { font-size: 12px; }
+@media print {
+  .map-box, .refine, .votes, .share { display: none !important; }
+}

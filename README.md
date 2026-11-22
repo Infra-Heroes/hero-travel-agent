@@ -8,6 +8,13 @@ Persönlicher Reiseplaner als eigener Agent pro Person, deployt auf InfraHeroes.
 - **Meine Reisen:** Vorschläge und Pläne merken (SQLite im eigenen Volume), Plan als Kalenderdatei (`.ics`) exportieren, drucken
 
 Preise sind Schätzungen und als solche gekennzeichnet.
+- **Tag anpassen:** einen einzelnen Tag nach einem Wunsch neu planen („entspannter“, „mehr für Kinder“), die anderen Tage bleiben
+- **Teilen:** ein Link nur zum Lesen (`/s/<token>`) für Mitreisende ohne Konto, 7, 30 oder 90 Tage gültig, jederzeit zurückziehbar
+- **Fakten statt Schätzung:** mit Startdatum das gemessene Wetter derselben Tage der letzten drei Jahre (Open-Meteo) sowie Feiertage und Schulferien am Ziel (OpenHolidays). Beides fließt in den Plan ein; fehlt eine Quelle, geht es ohne
+- **Karte:** die Orte jedes Tages auf OpenStreetMap (Leaflet liegt unter `static/vendor`), Orte weit weg vom Ziel werden verworfen
+- **Machbarkeit:** geschätzte Wege pro Tag, Warnung bei zu viel Fahrerei für das Tempo, bei bekannten Ruhetagen und an Feiertagen (`app/checks.py`, ohne Routing-Dienst)
+- **Daumen hoch/runter:** pro Vorschlag; Gemochtes und Abgelehntes fließt in die nächsten Vorschläge ein
+- **Profil:** Abreiseort, Reisende, Budget, Vorlieben, Meiden und Barrierefreiheit einmal angeben; füllt die Formulare vor und geht mit jeder Anfrage mit
 
 ## Technik
 - FastAPI, eine einzige Seite (Vanilla JS, ohne Build-Schritt)

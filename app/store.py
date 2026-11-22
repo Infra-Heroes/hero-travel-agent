@@ -7,6 +7,9 @@
 - trips: saved suggestions and plans, each belonging to one user.
 - usage: model calls per user and day, and for everybody together, so a person and
   the agent as a whole both have a ceiling.
+- profiles: what a person would otherwise type in every time (origin, travellers, ...).
+- votes: thumbs up or down per destination, fed into later suggestions.
+- shares: read-only links to a trip, each with its own random token and an expiry.
 - activity: which users were active on which day. That is what "users per day" is
   counted from, and it stays when a user is deleted.
 """
@@ -71,6 +74,24 @@ class Store:
                 );
                 CREATE TABLE IF NOT EXISTS usage (day TEXT PRIMARY KEY, calls INTEGER NOT NULL);
                 CREATE TABLE IF NOT EXISTS meta (key TEXT PRIMARY KEY, value TEXT NOT NULL);
+                CREATE TABLE IF NOT EXISTS profiles (
+                    user_id TEXT PRIMARY KEY REFERENCES users(id) ON DELETE CASCADE,
+                    data TEXT NOT NULL,
+                    updated_at TEXT NOT NULL
+                );
+                CREATE TABLE IF NOT EXISTS votes (
+                    user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+                    destination TEXT NOT NULL,
+                    vote INTEGER NOT NULL CHECK (vote IN (-1, 1)),
+                    created_at TEXT NOT NULL,
+                    PRIMARY KEY (user_id, destination)
+                );
+                CREATE TABLE IF NOT EXISTS shares (
+                    token TEXT PRIMARY KEY,
+                    trip_id TEXT NOT NULL UNIQUE REFERENCES trips(id) ON DELETE CASCADE,
+                    user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+                    expires_at TEXT NOT NULL
+                );
                 CREATE TABLE IF NOT EXISTS activity (
                     day TEXT NOT NULL,
                     user_id TEXT NOT NULL,
@@ -276,3 +297,99 @@ class Store:
         with self._lock, self._db:
             cur = self._db.execute("DELETE FROM trips WHERE id = ? AND user_id = ?", (trip_id, user_id))
         return cur.rowcount > 0
+
+    def update_payload(self, user_id: str, trip_id: str, payload: dict[str, Any]) -> bool:
+        with self._lock, self._db:
+            cur = self._db.execute(
+                "UPDATE trips SET payload = ? WHERE id = ? AND user_id = ?",
+                (json.dumps(payload, ensure_ascii=False), trip_id, user_id),
+            )
+        return cur.rowcount > 0
+
+    # -- profile ---------------------------------------------------------------
+
+    def profile(self, user_id: str) -> dict[str, Any] | None:
+        row = self._db.execute("SELECT data FROM profiles WHERE user_id = ?", (user_id,)).fetchone()
+        return json.loads(row["data"]) if row else None
+
+    def set_profile(self, user_id: str, data: dict[str, Any]) -> None:
+        with self._lock, self._db:
+            self._db.execute(
+                "INSERT INTO profiles (user_id, data, updated_at) VALUES (?, ?, ?) "
+                "ON CONFLICT(user_id) DO UPDATE SET data = excluded.data, updated_at = excluded.updated_at",
+                (user_id, json.dumps(data, ensure_ascii=False), now_iso()),
+            )
+
+    # -- votes -----------------------------------------------------------------
+
+    def vote(self, user_id: str, destination: str, vote: int) -> None:
+        """+1 or -1 sets the vote, 0 takes it back."""
+        with self._lock, self._db:
+            if vote == 0:
+                self._db.execute(
+                    "DELETE FROM votes WHERE user_id = ? AND destination = ?", (user_id, destination)
+                )
+                return
+            self._db.execute(
+                "INSERT INTO votes (user_id, destination, vote, created_at) VALUES (?, ?, ?, ?) "
+                "ON CONFLICT(user_id, destination) DO UPDATE SET vote = excluded.vote, "
+                "created_at = excluded.created_at",
+                (user_id, destination, vote, now_iso()),
+            )
+
+    def votes(self, user_id: str, limit: int = 10) -> dict[str, list[str]]:
+        """The latest liked and disliked destinations, newest first."""
+        out: dict[str, list[str]] = {"liked": [], "disliked": []}
+        for v, key in ((1, "liked"), (-1, "disliked")):
+            rows = self._db.execute(
+                "SELECT destination FROM votes WHERE user_id = ? AND vote = ? ORDER BY created_at DESC LIMIT ?",
+                (user_id, v, limit),
+            ).fetchall()
+            out[key] = [r["destination"] for r in rows]
+        return out
+
+    def vote_counts(self) -> dict[int, int]:
+        rows = self._db.execute("SELECT vote, COUNT(*) AS n FROM votes GROUP BY vote").fetchall()
+        return {int(r["vote"]): int(r["n"]) for r in rows}
+
+    # -- shares ----------------------------------------------------------------
+
+    def share(self, user_id: str, trip_id: str, token: str, days: int) -> dict[str, Any] | None:
+        """One link per trip: sharing again replaces the old link."""
+        expires = (datetime.now(UTC) + timedelta(days=days)).isoformat(timespec="seconds")
+        with self._lock, self._db:
+            if not self._db.execute(
+                "SELECT 1 FROM trips WHERE id = ? AND user_id = ?", (trip_id, user_id)
+            ).fetchone():
+                return None
+            self._db.execute("DELETE FROM shares WHERE trip_id = ?", (trip_id,))
+            self._db.execute(
+                "INSERT INTO shares (token, trip_id, user_id, expires_at) VALUES (?, ?, ?, ?)",
+                (token, trip_id, user_id, expires),
+            )
+        return {"token": token, "expires_at": expires}
+
+    def unshare(self, user_id: str, trip_id: str) -> bool:
+        with self._lock, self._db:
+            cur = self._db.execute("DELETE FROM shares WHERE trip_id = ? AND user_id = ?", (trip_id, user_id))
+        return cur.rowcount > 0
+
+    def share_of(self, user_id: str, trip_id: str) -> dict[str, Any] | None:
+        row = self._db.execute(
+            "SELECT token, expires_at FROM shares WHERE trip_id = ? AND user_id = ? AND expires_at > ?",
+            (trip_id, user_id, now_iso()),
+        ).fetchone()
+        return dict(row) if row else None
+
+    def shared(self, token: str) -> dict[str, Any] | None:
+        """The trip behind a link that has not expired, without its owner."""
+        row = self._db.execute(
+            "SELECT t.title, t.kind, t.payload, s.expires_at FROM shares s JOIN trips t ON t.id = s.trip_id "
+            "WHERE s.token = ? AND s.expires_at > ?",
+            (token, now_iso()),
+        ).fetchone()
+        if row is None:
+            return None
+        out = dict(row)
+        out["payload"] = json.loads(out["payload"])
+        return out

@@ -48,6 +48,7 @@ function showTab(name) {
   document.querySelectorAll('[role="tab"]').forEach((b) => b.setAttribute("aria-selected", String(b.dataset.tab === name)));
   document.querySelectorAll(".panel").forEach((p) => (p.hidden = p.id !== `tab-${name}`));
   if (name === "trips") loadTrips();
+  if (name === "profile") loadProfile();
 }
 document.querySelectorAll('[role="tab"]').forEach((b) => b.addEventListener("click", () => showTab(b.dataset.tab)));
 
@@ -117,7 +118,7 @@ async function busy(button, label, fn) {
   }
 }
 
-const eur = (n) => new Intl.NumberFormat(window.I18N.lang === "en" ? "en-GB" : "de-DE", { style: "currency", currency: "EUR", maximumFractionDigits: 0 }).format(n);
+const eur = window.Render.eur;
 
 // ── Autocomplete and help ────────────────────────────────────────────────────
 const MONTHS = ["Januar", "Februar", "März", "April", "Mai", "Juni", "Juli", "August", "September", "Oktober", "November", "Dezember"];
@@ -206,6 +207,14 @@ $("#example-plan").addEventListener("click", () => {
 
 // ── Suggestions ──────────────────────────────────────────────────────────────
 let lastBrief = null;
+// Thumbs given before, {destination: 1|-1}, so the buttons show them.
+const myVotes = {};
+api("/api/votes")
+  .then((v) => {
+    for (const d of v.liked) myVotes[d] = 1;
+    for (const d of v.disliked) myVotes[d] = -1;
+  })
+  .catch(() => {});
 
 function renderSuggestions(data, target, { saveable = true } = {}) {
   target.replaceChildren();
@@ -228,37 +237,21 @@ function renderSuggestions(data, target, { saveable = true } = {}) {
   }
   target.append(head);
 
-  const list = document.createElement("div");
-  list.className = "suggestions";
-  for (const s of data.suggestions) {
-    const node = $("#t-suggestion").content.cloneNode(true);
-    window.I18N.translate(node);
-    $(".dest", node).textContent = s.destination;
-    $(".price", node).textContent = `${__("ca.")} ${eur(s.total_estimate_eur)}`;
-    $(".why", node).textContent = s.why_it_fits;
-    $(".weather", node).textContent = s.weather;
-    $(".getting", node).textContent = s.getting_there;
-    $(".stay", node).textContent = s.accommodation;
-    const hl = $(".highlights", node);
-    for (const h of s.highlights) {
-      const li = document.createElement("li");
-      li.textContent = h;
-      hl.append(li);
-    }
-    const tbody = $(".costs tbody", node);
-    for (const c of s.cost_estimate) {
-      const tr = document.createElement("tr");
-      const a = document.createElement("td");
-      const b = document.createElement("td");
-      a.textContent = c.item;
-      b.textContent = eur(c.eur);
-      tr.append(a, b);
-      tbody.append(tr);
-    }
-    $(".caveat", node).textContent = s.caveat;
-    $(".to-plan", node).addEventListener("click", () => prefillPlan(s.destination));
-    list.append(node);
-  }
+  const list = window.Render.suggestions(data, {
+    onToPlan: prefillPlan,
+    votes: myVotes,
+    onVote: async (destination, vote) => {
+      try {
+        await api("/api/votes", { method: "POST", body: JSON.stringify({ destination, vote }) });
+        if (vote) myVotes[destination] = vote;
+        else delete myVotes[destination];
+        toast(vote ? __("Danke, das fließt in die nächsten Vorschläge ein.") : __("Bewertung zurückgenommen."));
+      } catch (err) {
+        toast(err.message);
+        throw err;
+      }
+    },
+  });
   target.append(list);
 }
 
@@ -392,6 +385,86 @@ function planTable(plan) {
 }
 
 // ── Day plan ─────────────────────────────────────────────────────────────────
+// A read-only link for fellow travellers without an account.
+function shareButton(tripId) {
+  const box = document.createElement("details");
+  box.className = "menu share";
+  const sum = document.createElement("summary");
+  sum.textContent = __("Teilen");
+  const body = document.createElement("div");
+  body.className = "menu-body";
+  box.append(sum, body);
+  const show = (share) => {
+    body.replaceChildren();
+    if (share) {
+      const url = `${location.origin}/s/${share.token}`;
+      const field = document.createElement("input");
+      field.readOnly = true;
+      field.value = url;
+      field.setAttribute("aria-label", __("Link zum Teilen"));
+      const copy = document.createElement("button");
+      copy.type = "button";
+      copy.textContent = __("Link kopieren");
+      copy.addEventListener("click", async () => {
+        try {
+          await navigator.clipboard.writeText(url);
+          toast(__("Link kopiert."));
+        } catch {
+          field.select();
+        }
+      });
+      const until = document.createElement("small");
+      until.className = "muted";
+      until.textContent = `${__("Nur lesen, gültig bis")} ${new Date(share.expires_at).toLocaleDateString(window.I18N.lang === "en" ? "en-GB" : "de-DE")}`;
+      const stop = document.createElement("button");
+      stop.type = "button";
+      stop.className = "link";
+      stop.textContent = __("Link zurückziehen");
+      stop.addEventListener("click", async () => {
+        await api(`/api/trips/${tripId}/share`, { method: "DELETE" });
+        toast(__("Der Link funktioniert nicht mehr."));
+        show(null);
+      });
+      body.append(field, copy, until, stop);
+      return;
+    }
+    const days = document.createElement("select");
+    days.setAttribute("aria-label", __("Gültigkeit"));
+    for (const [n, label] of [[7, __("7 Tage")], [30, __("30 Tage")], [90, __("90 Tage")]]) {
+      const o = document.createElement("option");
+      o.value = n;
+      o.textContent = label;
+      if (n === 30) o.selected = true;
+      days.append(o);
+    }
+    const make = document.createElement("button");
+    make.type = "button";
+    make.className = "primary";
+    make.textContent = __("Link erstellen");
+    make.addEventListener("click", async () => {
+      try {
+        show(await api(`/api/trips/${tripId}/share`, { method: "POST", body: JSON.stringify({ days: Number(days.value) }) }));
+      } catch (err) {
+        toast(err.message);
+      }
+    });
+    const note = document.createElement("small");
+    note.className = "muted";
+    note.textContent = __("Wer den Link hat, kann diese Reise ohne Konto ansehen, aber nichts ändern.");
+    body.append(days, make, note);
+  };
+  box.addEventListener("toggle", async () => {
+    if (!box.open || box.dataset.loaded) return;
+    box.dataset.loaded = "1";
+    try {
+      show((await api(`/api/trips/${tripId}`)).share);
+    } catch (err) {
+      toast(err.message);
+    }
+  });
+  return box;
+}
+
 function renderPlan(plan, target, { tripId = null } = {}) {
   target.replaceChildren();
   const wrap = document.createElement("div");
@@ -408,7 +481,7 @@ function renderPlan(plan, target, { tripId = null } = {}) {
     ics.className = "button";
     ics.href = `/api/trips/${tripId}/calendar.ics`;
     ics.textContent = __("In Kalender übernehmen");
-    actions.append(ics);
+    actions.append(ics, shareButton(tripId));
   } else {
     const save = document.createElement("button");
     save.textContent = __("Plan merken");
@@ -483,8 +556,20 @@ function renderPlan(plan, target, { tripId = null } = {}) {
   actions.append(cal);
   wrap.append(h, ov, actions);
 
-  const days = document.createElement("div");
-  days.className = "days";
+  const body = window.Render.planBody(plan, {
+    onRefine: (day, wish, button) =>
+      busy(button, __("Der Agent plant…"), async () => {
+        const pace = $("#planform").pace.value;
+        const next = await api("/api/plan/refine", {
+          method: "POST",
+          body: JSON.stringify({ plan, day, wish, pace, lang: window.I18N.lang, trip_id: tripId }),
+        });
+        renderPlan(next, target, { tripId });
+        document.getElementById(`day-${day}`)?.scrollIntoView({ behavior: "smooth", block: "start" });
+        toast(tripId ? __("Tag neu geplant und gespeichert.") : __("Tag neu geplant."));
+      }),
+  });
+  const days = body.days;
   const tableBox = document.createElement("div");
   tableBox.className = "table-box";
   tableBox.hidden = true;
@@ -496,34 +581,7 @@ function renderPlan(plan, target, { tripId = null } = {}) {
     view.textContent = toTable ? __("Kartenansicht") : __("Tabellenansicht");
     wrap.classList.toggle("as-table", toTable);
   });
-  wrap.append(days, tableBox);
-
-  for (const d of plan.days) {
-    const node = $("#t-day").content.cloneNode(true);
-    window.I18N.translate(node);
-    $(".num", node).textContent = d.day;
-    $(".theme", node).textContent = d.theme;
-    $(".date", node).textContent = d.date;
-    $(".morning", node).textContent = d.morning;
-    $(".afternoon", node).textContent = d.afternoon;
-    $(".evening", node).textContent = d.evening;
-    $(".food", node).textContent = d.food_tip;
-    $(".rain", node).textContent = d.bad_weather;
-    $(".logistics", node).textContent = d.logistics;
-    days.append(node);
-  }
-  const ph = document.createElement("h3");
-  ph.textContent = __("Packliste");
-  const pl = document.createElement("ul");
-  pl.className = "packing";
-  for (const item of plan.packing_list) {
-    const li = document.createElement("li");
-    const box = document.createElement("input");
-    box.type = "checkbox";
-    li.append(box, " " + item);
-    pl.append(li);
-  }
-  wrap.append(ph, pl);
+  wrap.append(body, tableBox);
   target.append(wrap);
 }
 
@@ -558,7 +616,10 @@ async function loadTrips() {
         const trip = await api(`/api/trips/${t.id}`);
         const out = $("#trip-out");
         if (trip.kind === "plan") renderPlan(trip.payload, out, { tripId: trip.id });
-        else renderSuggestions(trip.payload, out, { saveable: false });
+        else {
+          renderSuggestions(trip.payload, out, { saveable: false });
+          $(".result-head", out)?.append(shareButton(trip.id));
+        }
         out.scrollIntoView({ behavior: "smooth" });
       });
       const meta = document.createElement("span");
@@ -608,3 +669,50 @@ $("#logout").addEventListener("click", async () => {
   await fetch("/api/auth/logout", { method: "POST" });
   window.location.href = "/";
 });
+
+// ── Profile ──────────────────────────────────────────────────────────────────
+// Filled in once, it prefills both forms and goes with every request.
+const profileForm = $("#profileform");
+
+function applyProfile(p) {
+  const brief = $("#brief");
+  const planf = $("#planform");
+  if (p.origin && !brief.origin.value) brief.origin.value = p.origin;
+  if (p.budget_eur) brief.budget_eur.value = p.budget_eur;
+  for (const f of [brief, planf]) {
+    f.adults.value = p.adults;
+    f.children.value = p.children;
+    if (p.interests.length) setChecked(f, p.interests);
+  }
+}
+
+async function loadProfile() {
+  try {
+    const { profile } = await api("/api/profile");
+    const f = profileForm;
+    for (const key of ["origin", "adults", "children", "budget_eur", "avoid", "accessibility", "notes"]) {
+      f[key].value = profile[key] ?? "";
+    }
+    setChecked(f, profile.interests);
+  } catch (err) {
+    toast(err.message);
+  }
+}
+
+profileForm.addEventListener("submit", (e) => {
+  e.preventDefault();
+  const button = $("#profileform button[type=submit]");
+  busy(button, __("Speichere…"), async () => {
+    const data = formData(profileForm);
+    delete data.lang;
+    for (const key of ["avoid", "accessibility", "notes", "origin"]) data[key] = profileForm[key].value.trim();
+    if (!profileForm.budget_eur.value) data.budget_eur = null;
+    const { profile } = await api("/api/profile", { method: "PUT", body: JSON.stringify(data) });
+    applyProfile(profile);
+    toast(__("Profil gespeichert. Es gilt ab der nächsten Anfrage."));
+  });
+});
+
+api("/api/profile")
+  .then(({ profile, saved }) => saved && applyProfile(profile))
+  .catch(() => {});
