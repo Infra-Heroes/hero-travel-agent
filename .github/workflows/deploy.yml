@@ -1,0 +1,47 @@
+# Tests and deploy on GitHub Actions. The code lives on git.infra-heroes.de and is
+# mirrored here; a push to main there arrives here as a push to main.
+#
+# Secret HERO_TOKEN: a deploy token held to the project urlaubs-agent
+# (heroctl tokens create --scope deploy --project urlaubs-agent).
+#
+# Until the switch from Woodpecker is done this runs only by hand (workflow_dispatch),
+# so the two never deploy at the same time.
+name: test and deploy
+
+on:
+  workflow_dispatch:
+
+concurrency:
+  group: deploy-urlaubs-agent
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4.2.2
+      - uses: actions/setup-python@v5.6.0
+        with:
+          python-version: "3.14"
+      - run: pip install --no-cache-dir --upgrade pip && pip install --no-cache-dir -e '.[dev]'
+      - run: ruff check .
+      - run: ruff format --check .
+      - run: pytest -q
+      - run: bandit -r app -ll
+      - run: pip-audit --progress-spinner off
+
+  deploy:
+    needs: test
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4.2.2
+      - id: deploy
+        uses: infra-heroes/deploy-action@v1.2.3
+        with:
+          token: ${{ secrets.HERO_TOKEN }}
+          project: urlaubs-agent
+          heroctl-version: v1.18.0
+      - run: echo "Deployed to ${{ steps.deploy.outputs.url }}"
