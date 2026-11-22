@@ -1,50 +1,47 @@
-# Sicherheit
+# Security
 
-## Eine Lücke melden
+## Reporting a vulnerability
 
-Bitte nicht als öffentliches Issue, sondern per Mail an **info@infra-heroes.de** mit dem Betreff
-„Security Urlaubs-Agent“. Wir melden uns so schnell wie möglich.
+Please do not open a public issue. Write to **info@infra-heroes.de** with the subject
+"Security Urlaubs-Agent". We will get back to you as soon as we can.
 
-## Wie der Agent geschützt ist
+## How the agent is protected
 
-### Anmeldung
+### Sign-in
 
-- Konten sind E-Mail-Adressen, angemeldet wird mit einem sechsstelligen Code, ohne Passwort.
-- Ein Code gilt 10 Minuten, einmal und für höchstens 5 Versuche. Gespeichert wird nur ein
-  HMAC-SHA256 des Codes mit dem Serverschlüssel.
-- „Code senden“ antwortet für bekannte und unbekannte Adressen gleich; man kann nicht erfragen,
-  wer ein Konto hat.
-- Begrenzt sind: Codes anfordern (3 pro Adresse und 10 pro Client in 10 Minuten, 200 pro Stunde
-  insgesamt) und Codes probieren (20 pro Client in 10 Minuten).
-- Die Sitzung ist ein signiertes Cookie: HttpOnly, SameSite=Strict, über HTTPS Secure, 14 Tage.
-- `ALLOWED_EMAILS` und `ALLOWED_EMAIL_DOMAINS` schränken ein, wer sich anmelden darf.
+- Accounts are e-mail addresses; you sign in with a six-digit code, no password.
+- A code is valid for 10 minutes, once, for at most 5 attempts. Only an HMAC-SHA256 of the code
+  with the server key is stored.
+- "Send code" answers the same for known and unknown addresses; nobody can find out who has an
+  account.
+- Rate limited: asking for codes (3 per address and 10 per client in 10 minutes, 200 an hour in
+  total) and trying codes (20 per client in 10 minutes).
+- The session is a signed cookie: HttpOnly, SameSite=Strict, Secure over HTTPS, 14 days.
+- `ALLOWED_EMAILS` and `ALLOWED_EMAIL_DOMAINS` restrict who may sign in.
 
-### Daten
+### Data
 
-- Jede gespeicherte Reise, jedes Profil, jede Bewertung gehört genau einer Person; alle Abfragen
-  filtern nach ihr.
-- Freigabe-Links sind zufällige Token (144 Bit), laufen ab, lassen sich zurückziehen und zeigen
-  nichts über die Person. Die Seite schickt nur die Domain als Referrer mit und wird nicht
-  indexiert.
-- Gespeicherte Pläne werden gegen das Schema geprüft, bevor sie in die Datenbank gehen.
+- Every saved trip, profile and rating belongs to exactly one person; every query filters by them.
+- Share links are random tokens (144 bits), expire, can be withdrawn and show nothing about the
+  person. The page sends only the domain as referrer and is not indexed.
+- Saved plans are validated against the schema before they are stored.
 
-### Seite
+### Page
 
-- Content-Security-Policy: Skripte, Stile und Verbindungen nur vom eigenen Host, Bilder zusätzlich
-  von `tile.openstreetmap.org`; keine Inline-Skripte, kein Einbetten in fremde Seiten.
-- Alles, was aus einer Modellantwort stammt, wird als Text gesetzt, nie als HTML.
-- Dazu `X-Content-Type-Options`, `Referrer-Policy`, `Permissions-Policy`,
-  `Cross-Origin-Opener-Policy` und über HTTPS `Strict-Transport-Security`.
-- Anfragen über 256 KB werden abgewiesen, bevor sie gelesen werden.
+- Content Security Policy: scripts, styles and connections from the own host only, images also
+  from `tile.openstreetmap.org`; no inline scripts, no framing by other sites.
+- Everything that comes from a model answer is set as text, never as HTML.
+- Also `X-Content-Type-Options`, `Referrer-Policy`, `Permissions-Policy`,
+  `Cross-Origin-Opener-Policy` and, over HTTPS, `Strict-Transport-Security`.
+- Requests over 256 KB are refused before they are read.
 
-### Kosten
+### Cost
 
-Tageslimits pro Person und insgesamt begrenzen, was ein Konto oder ein Angriff an Modellkosten
-verursachen kann.
+Daily limits per person and in total cap what one account, or an attack, can cost in model calls.
 
-### Betrieb
+### Operations
 
-- Der Server läuft im Container als Benutzer ohne Rechte.
-- Secrets kommen aus der Plattform, nie aus dem Repository.
-- Die CI prüft jeden Pull Request mit `bandit` (Codemuster) und `pip-audit` (bekannte Lücken in
-  Abhängigkeiten); Renovate hält die Abhängigkeiten aktuell.
+- The server runs in the container as an unprivileged user.
+- Secrets come from the platform, never from the repository.
+- CI checks every pull request with `bandit` (code patterns) and `pip-audit` (known vulnerabilities
+  in dependencies); Renovate keeps dependencies up to date.

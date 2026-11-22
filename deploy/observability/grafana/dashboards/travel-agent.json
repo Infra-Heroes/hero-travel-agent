@@ -17,7 +17,7 @@
     {
       "id": 1,
       "type": "stat",
-      "title": "Nutzer gesamt",
+      "title": "Users total",
       "description": "",
       "datasource": {
         "type": "prometheus",
@@ -63,8 +63,8 @@
     {
       "id": 2,
       "type": "stat",
-      "title": "Aktive Nutzer heute",
-      "description": "Nutzer, die heute (UTC) angemeldet waren oder eine Anfrage gestellt haben.",
+      "title": "Active users today",
+      "description": "Users who signed in or made a request today (UTC).",
       "datasource": {
         "type": "prometheus",
         "uid": "prometheus"
@@ -109,7 +109,7 @@
     {
       "id": 3,
       "type": "stat",
-      "title": "Neue Nutzer heute",
+      "title": "New users today",
       "description": "",
       "datasource": {
         "type": "prometheus",
@@ -155,7 +155,7 @@
     {
       "id": 4,
       "type": "stat",
-      "title": "Modellanfragen heute",
+      "title": "Model requests today",
       "description": "",
       "datasource": {
         "type": "prometheus",
@@ -201,7 +201,7 @@
     {
       "id": 5,
       "type": "stat",
-      "title": "Tageslimit gesamt",
+      "title": "Daily limit total",
       "description": "",
       "datasource": {
         "type": "prometheus",
@@ -247,8 +247,8 @@
     {
       "id": 6,
       "type": "stat",
-      "title": "Kosten im Zeitraum",
-      "description": "Von OpenRouter gemeldete Kosten der Modellaufrufe im gewaehlten Zeitraum.",
+      "title": "Cost in range",
+      "description": "Cost of model calls reported by OpenRouter in the selected range.",
       "datasource": {
         "type": "prometheus",
         "uid": "prometheus"
@@ -293,8 +293,8 @@
     {
       "id": 7,
       "type": "timeseries",
-      "title": "Aktive Nutzer pro Tag",
-      "description": "Der Tagesmaximalwert der Tageszaehlung.",
+      "title": "Active users per day",
+      "description": "The highest value of the daily count.",
       "datasource": {
         "type": "prometheus",
         "uid": "prometheus"
@@ -309,7 +309,7 @@
         {
           "refId": "A",
           "expr": "max_over_time(travel_agent_active_users_today[1d])",
-          "legendFormat": "aktive Nutzer",
+          "legendFormat": "active users",
           "datasource": {
             "type": "prometheus",
             "uid": "prometheus"
@@ -340,7 +340,7 @@
     {
       "id": 8,
       "type": "timeseries",
-      "title": "Neue Nutzer und Anfragen pro Tag",
+      "title": "New users and requests per day",
       "description": "",
       "datasource": {
         "type": "prometheus",
@@ -356,7 +356,7 @@
         {
           "refId": "A",
           "expr": "max_over_time(travel_agent_new_users_today[1d])",
-          "legendFormat": "neue Nutzer",
+          "legendFormat": "new users",
           "datasource": {
             "type": "prometheus",
             "uid": "prometheus"
@@ -365,7 +365,7 @@
         {
           "refId": "B",
           "expr": "max_over_time(travel_agent_model_calls_today[1d])",
-          "legendFormat": "Modellanfragen",
+          "legendFormat": "Model requests",
           "datasource": {
             "type": "prometheus",
             "uid": "prometheus"
@@ -396,8 +396,8 @@
     {
       "id": 9,
       "type": "timeseries",
-      "title": "Anfragen nach Ergebnis",
-      "description": "ok, error, limited_user (Tageslimit der Person), limited_global (Tageslimit des Agenten).",
+      "title": "Requests by result",
+      "description": "ok, error, limited_user (person's daily limit), limited_global (agent's daily limit).",
       "datasource": {
         "type": "prometheus",
         "uid": "prometheus"
@@ -443,7 +443,7 @@
     {
       "id": 10,
       "type": "timeseries",
-      "title": "Anmeldung: Codes und Eingaben",
+      "title": "Sign-in: codes and attempts",
       "description": "",
       "datasource": {
         "type": "prometheus",
@@ -459,7 +459,7 @@
         {
           "refId": "A",
           "expr": "sum by (result) (increase(travel_agent_code_requests_total[$__rate_interval]))",
-          "legendFormat": "Code {{result}}",
+          "legendFormat": "code {{result}}",
           "datasource": {
             "type": "prometheus",
             "uid": "prometheus"
@@ -468,7 +468,7 @@
         {
           "refId": "B",
           "expr": "sum by (result) (increase(travel_agent_logins_total[$__rate_interval]))",
-          "legendFormat": "Eingabe {{result}}",
+          "legendFormat": "attempt {{result}}",
           "datasource": {
             "type": "prometheus",
             "uid": "prometheus"
@@ -499,7 +499,7 @@
     {
       "id": 11,
       "type": "timeseries",
-      "title": "Antwortzeit des Modells",
+      "title": "Model response time",
       "description": "",
       "datasource": {
         "type": "prometheus",
@@ -524,7 +524,7 @@
         {
           "refId": "B",
           "expr": "histogram_quantile(0.95, sum by (le) (rate(travel_agent_model_seconds_bucket[$__rate_interval])))",
-          "legendFormat": "95. Perzentil",
+          "legendFormat": "95th percentile",
           "datasource": {
             "type": "prometheus",
             "uid": "prometheus"
@@ -555,7 +555,7 @@
     {
       "id": 12,
       "type": "timeseries",
-      "title": "Token und Kosten",
+      "title": "Tokens and cost",
       "description": "",
       "datasource": {
         "type": "prometheus",
@@ -571,7 +571,7 @@
         {
           "refId": "A",
           "expr": "sum by (type) (increase(travel_agent_model_tokens_total[$__rate_interval]))",
-          "legendFormat": "Token {{type}}",
+          "legendFormat": "tokens {{type}}",
           "datasource": {
             "type": "prometheus",
             "uid": "prometheus"
@@ -580,7 +580,7 @@
         {
           "refId": "B",
           "expr": "sum(increase(travel_agent_model_cost_dollars_total[$__rate_interval]))",
-          "legendFormat": "Kosten (USD)",
+          "legendFormat": "Cost (USD)",
           "datasource": {
             "type": "prometheus",
             "uid": "prometheus"

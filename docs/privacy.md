@@ -1,33 +1,32 @@
-# Daten und Datenschutz
+# Data and privacy
 
-Die rechtlich verbindliche Fassung steht auf der Seite `/datenschutz`. Hier steht technisch, was
-wohin geht.
+The legally binding text is the page `/datenschutz`. This is the technical view of what goes where.
 
-## Was gespeichert wird
+## What is stored
 
-| Daten | Wozu | Wie lange |
+| Data | Why | How long |
 |---|---|---|
-| E-Mail-Adresse | Konto, Anmeldecode | bis zum Löschen des Kontos |
-| Hash des Anmeldecodes | Prüfen des Codes | 10 Minuten, oder bis er benutzt ist |
-| gemerkte Reisen, Profil, Bewertungen, Freigaben | was die Person selbst speichert | bis sie es löscht oder das Konto löscht |
-| Anfragen pro Person und Tag | Tageslimit | bis zum Löschen des Kontos |
-| aktive Personen pro Tag | Zahlen für den Betreiber | Tage ohne Person bleiben als Zählung |
+| e-mail address | account, sign-in code | until the account is deleted |
+| hash of the sign-in code | checking the code | 10 minutes, or until used |
+| saved trips, profile, ratings, share links | what the person saves | until they delete it or the account |
+| requests per person and day | the daily limit | until the account is deleted |
+| active people per day | numbers for the operator | days without a person remain as a count |
 
-„Konto löschen“ entfernt alles, was zu der Person gehört, sofort und endgültig. Übrig bleibt nur
-die Zahl der Anfragen pro Tag insgesamt, ohne Bezug zu einer Person.
+"Delete account" removes everything that belongs to the person, at once and for good. Only the
+total number of requests per day remains, with no link to a person.
 
-Es gibt ein einziges Cookie: die signierte Sitzung (HttpOnly, SameSite=Strict, über HTTPS Secure,
-14 Tage). Kein Tracking, keine Werbung, keine Analyse-Dienste.
+There is one cookie: the signed session (HttpOnly, SameSite=Strict, Secure over HTTPS, 14 days).
+No tracking, no ads, no analytics services.
 
-## Was an andere Dienste geht
+## What goes to other services
 
-| Dienst | Was | Wann |
+| Service | What | When |
 |---|---|---|
-| OpenRouter, weiter an den Anbieter des Modells | der Reisewunsch, Profilangaben, frühere Bewertungen von Zielen; keine E-Mail-Adresse | bei jeder Anfrage. Gesendet wird mit `data_collection: deny`, also nur an Anbieter, die nicht mit den Daten trainieren |
-| Open-Meteo | Name des Ziels, Koordinaten, Reisedaten | beim Tagesplan |
-| OpenHolidays | Land, Reisedaten | beim Tagesplan mit Startdatum |
-| OpenStreetMap (Kacheln) | Kartenausschnitt, IP-Adresse des Browsers, Herkunft der Seite (ohne Pfad) | beim Anzeigen der Karte, direkt aus dem Browser |
-| Mailserver | E-Mail-Adresse, Code | beim Anmelden |
+| OpenRouter, and on to the model provider | the trip wish, profile details, earlier ratings of destinations; no e-mail address | every request. Sent with `data_collection: deny`, so only to providers that do not train on the data |
+| Open-Meteo | destination name, coordinates, travel dates | day plans |
+| OpenHolidays | country, travel dates | day plans with a start date |
+| OpenStreetMap (tiles) | map area, the browser's IP address, origin of the page (no path) | when a map is shown, directly from the browser |
+| mail server | e-mail address, code | sign-in |
 
-Die Freigabe-Seite schickt beim Laden der Kartenkacheln nur die Domain als Herkunft mit
-(`Referrer-Policy: strict-origin`), nie den Pfad mit dem Token.
+The shared page sends only the domain as referrer when it loads map tiles
+(`Referrer-Policy: strict-origin`), never the path with the token.

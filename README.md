@@ -1,61 +1,69 @@
 # Urlaubs-Agent
 
-**Ein persönlicher Reiseplaner, der Vorschläge macht und die Tage plant, aber nichts bucht.**
+**A personal trip planner that suggests destinations and plans the days, and books nothing.**
 
-Du sagst, wann du verreisen willst, mit wem und wie viel es kosten darf. Der Agent schlägt
-drei passende Ziele vor und plant für das Ziel deiner Wahl jeden Tag: Vormittag, Nachmittag,
-Abend, Essen, Plan B bei Regen, dazu eine Packliste. Wetter und Feiertage stammen aus echten
-Daten statt aus Schätzungen, die Orte stehen auf einer Karte, und ein einfacher Prüfschritt
-warnt vor Tagen mit zu viel Fahrerei.
+> **This is an example app.** It shows what a small, complete product looks like when it runs
+> on [InfraHeroes](https://infra-heroes.de): an AI agent with accounts, limits, a database on a
+> volume, a custom domain, metrics and a CI/CD pipeline. Use it as a template for your own app.
+> Live at <https://www.urlaubs-planung.org> (German and English).
 
-Live: <https://www.urlaubs-planung.org> · Läuft auf [InfraHeroes](https://infra-heroes.de)
+You say when you want to travel, with whom and how much it may cost. The agent suggests three
+destinations that fit and, for the one you pick, plans every day: morning, afternoon, evening,
+where to eat, a plan B for rain and a packing list. Weather and holidays come from measured data
+instead of guesses, the places are shown on a map, and a simple check warns about days with too
+much travel.
 
-## Was er kann
+## Features
 
 | | |
 |---|---|
-| **Ideen finden** | drei Ziele mit Wetter, Anreise, Unterkunft, Highlights, Kostenschätzung und einer ehrlichen Einschränkung |
-| **Tagesplan** | bis zu 14 Tage, jeder Tag mit Karte, geschätzten Wegen und Hinweisen zur Machbarkeit |
-| **Echte Fakten** | gemessenes Wetter derselben Tage der letzten drei Jahre, Feiertage und Schulferien am Ziel |
-| **Nachbessern** | einen einzelnen Tag nach Wunsch neu planen, der Rest bleibt |
-| **Teilen** | Link nur zum Lesen für Mitreisende ohne Konto, mit Ablaufdatum |
-| **Lernt dazu** | Daumen hoch oder runter pro Vorschlag, dazu ein Profil mit Vorlieben, Dingen, die man meiden will, und Barrierefreiheit |
-| **Mitnehmen** | Kalenderdatei (.ics), Google-Kalender, PDF |
+| **Trip ideas** | three destinations with weather, getting there, accommodation, highlights, a cost estimate and an honest caveat |
+| **Day plans** | up to 14 days, each with a map, estimated travel and feasibility notes |
+| **Real facts** | measured weather of the same days in the last three years, public and school holidays at the destination |
+| **Refine** | replan a single day to a wish, the rest stays |
+| **Share** | a read-only link for fellow travellers without an account, with an expiry |
+| **Learns** | thumbs up or down per suggestion, and a profile with preferences, things to avoid and accessibility needs |
+| **Export** | calendar file (.ics), Google Calendar, PDF |
 
-Mehr dazu: [docs/features.md](docs/features.md).
+More in [docs/features.md](docs/features.md).
 
-## Schnellstart
+## Quick start
 
-Ohne API-Key läuft der Agent im **Demo-Modus** mit Beispielantworten, ohne Netz und ohne Kosten.
+Without an API key the agent runs in **demo mode** with sample answers: no network, no cost.
 
 ```bash
 uv venv --python 3.14 && uv pip install -e ".[dev]"
-make test          # Lint, Typen, Tests mit Abdeckung
-make run           # http://localhost:8780, Demo-Modus, Codes im Log
+make check    # lint, types, tests with coverage, security checks
+make run      # http://localhost:8780, demo mode, sign-in codes in the log
 ```
 
-Mit einem echten Modell: `OPENROUTER_API_KEY` setzen, siehe [.env.example](.env.example) und
+For real answers set `OPENROUTER_API_KEY`, see [.env.example](.env.example) and
 [docs/configuration.md](docs/configuration.md).
 
-## Wie er gebaut ist
+## How it is built
 
-FastAPI mit einer Seite in Vanilla-JavaScript, ohne Build-Schritt. Das Modell (standardmäßig
-DeepSeek V4 Flash über OpenRouter) antwortet in JSON nach einem festen Schema, die Seite rendert
-nur Daten, nie HTML vom Modell. Konten sind E-Mail-Adressen mit Einmalcode, gespeichert wird in
-einer SQLite-Datei.
+FastAPI and a single page in plain JavaScript, no build step. The model (DeepSeek V4 Flash on
+OpenRouter by default) answers in JSON that must match a fixed schema; the page renders data,
+never HTML from the model. Accounts are e-mail addresses with a one-time code; everything is
+stored in one SQLite file.
 
-| Dokument | Inhalt |
+| Document | Contents |
 |---|---|
-| [docs/architecture.md](docs/architecture.md) | Aufbau, Module, Datenfluss, Datenbank |
-| [docs/configuration.md](docs/configuration.md) | alle Umgebungsvariablen |
-| [docs/operations.md](docs/operations.md) | Deploy, Limits, Metriken, Kosten |
-| [docs/privacy.md](docs/privacy.md) | welche Daten wohin gehen |
-| [CONTRIBUTING.md](CONTRIBUTING.md) | Entwickeln, Testen, Beiträge |
-| [SECURITY.md](SECURITY.md) | Sicherheitsmodell, Lücken melden |
+| [docs/architecture.md](docs/architecture.md) | structure, modules, request flow, API, database |
+| [docs/configuration.md](docs/configuration.md) | all environment variables |
+| [docs/operations.md](docs/operations.md) | deploying on InfraHeroes, limits, metrics, cost, backup |
+| [docs/privacy.md](docs/privacy.md) | what data goes where |
+| [CONTRIBUTING.md](CONTRIBUTING.md) | development, tests, rules |
+| [SECURITY.md](SECURITY.md) | security model, reporting a vulnerability |
 
-## Grenzen
+## Limits
 
-- Er bucht nichts und verspricht keine Verfügbarkeit. Preise sind Schätzungen und so gekennzeichnet.
-- Die Koordinaten der Orte gibt das Modell an. Orte weit weg vom Ziel werden verworfen, der Rest
-  ist eine ungefähre Lage.
-- Die Wege sind Luftlinie mal Umwegfaktor, kein Routing.
+- It books nothing and promises no availability. Prices are estimates and say so.
+- Place coordinates come from the model. Places far from the destination are dropped; the rest
+  are approximate.
+- Travel times are straight-line distance times a detour factor, not routing.
+- The user interface and the prompts are German first; English is a translation.
+
+## License
+
+[MIT](LICENSE)
