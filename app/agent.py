@@ -21,7 +21,7 @@ from typing import Any
 from zoneinfo import ZoneInfo
 
 import httpx
-from pydantic import ValidationError
+from pydantic import BaseModel, ValidationError
 
 from app.schemas import LANGUAGE_NOTE, Day, DayPlan, DayPlanRequest, RefineRequest, Suggestions, TripBrief
 
@@ -65,7 +65,7 @@ def _reasoning(effort: str = "") -> dict[str, Any]:
     return {"effort": effort, "exclude": True}
 
 
-def _schema(model: type) -> dict[str, Any]:
+def _schema(model: type[BaseModel]) -> dict[str, Any]:
     """A JSON schema the structured-output endpoint accepts: every object
     closed (additionalProperties false) and every field required."""
     schema = model.model_json_schema()
@@ -118,7 +118,9 @@ class TravelAgent:
             )
         )
 
-    def _body(self, prompt: str, model_cls: type, extra: str = "", effort: str = "") -> dict[str, Any]:
+    def _body(
+        self, prompt: str, model_cls: type[BaseModel], extra: str = "", effort: str = ""
+    ) -> dict[str, Any]:
         return {
             "model": MODEL,
             "max_tokens": MAX_TOKENS,
@@ -138,7 +140,8 @@ class TravelAgent:
         }
 
     async def _call(self, body: dict[str, Any]) -> tuple[str, str]:
-        assert self._client is not None
+        if self._client is None:  # demo mode never calls the model
+            raise AgentError("Der Agent konnte die Anfrage nicht bearbeiten.")
         started = time.monotonic()
         try:
             res = await self._client.post("/chat/completions", json=body)
@@ -162,7 +165,7 @@ class TravelAgent:
             logger.error("Unreadable OpenRouter answer: %s", res.text[:300])
             raise AgentError("Der Agent konnte die Anfrage nicht bearbeiten.") from exc
 
-    async def _ask(self, prompt: str, model_cls: type, effort: str = "", days: int = 0) -> Any:
+    async def _ask(self, prompt: str, model_cls: type[BaseModel], effort: str = "", days: int = 0) -> Any:
         extra = ""
         for attempt in (1, 2):
             text, finish = await self._call(self._body(prompt, model_cls, extra, effort))
@@ -172,7 +175,7 @@ class TravelAgent:
                 raise AgentError("Zu dieser Anfrage kann der Agent keinen Vorschlag machen.")
             try:
                 result = model_cls.model_validate(json.loads(text))
-                if days and len(result.days) != days:
+                if days and isinstance(result, DayPlan) and len(result.days) != days:
                     raise ValueError(f"{len(result.days)} days instead of {days}")
                 return result
             except (ValueError, ValidationError):

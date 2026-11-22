@@ -45,7 +45,7 @@ def normalize_email(raw: str) -> str | None:
 class Limiter:
     """N events per window for a key; the oldest fall out."""
 
-    def __init__(self, limit: int, window: int, clock=time.time) -> None:  # type: ignore[no-untyped-def]
+    def __init__(self, limit: int, window: int, clock=time.time) -> None:
         self.limit, self.window, self.clock = limit, window, clock
         self._events: dict[str, deque[float]] = {}
 
@@ -72,7 +72,7 @@ class Limiter:
 
 
 class Auth:
-    def __init__(self, data_dir: Path, clock=time.time) -> None:  # type: ignore[no-untyped-def]
+    def __init__(self, data_dir: Path, clock=time.time) -> None:
         self._clock = clock
         self._key = self._load_key(data_dir)
         # Codes asked for: 3 per address and 10 per client in 10 minutes, 200 an hour in total.
@@ -114,7 +114,7 @@ class Auth:
     def code_hash(self, email: str, code: str) -> str:
         return hmac.new(self._key, f"code\0{email}\0{code}".encode(), hashlib.sha256).hexdigest()
 
-    def code_matches(self, email: str, code: str):  # type: ignore[no-untyped-def]
+    def code_matches(self, email: str, code: str):
         return lambda stored: hmac.compare_digest(stored, self.code_hash(email, code))
 
     # -- sessions --------------------------------------------------------------

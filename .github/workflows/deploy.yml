@@ -29,6 +29,7 @@ jobs:
       - run: pip install --no-cache-dir --upgrade pip && pip install --no-cache-dir -e '.[dev]'
       - run: ruff check .
       - run: ruff format --check .
+      - run: mypy
       - run: pytest -q
       - run: bandit -r app -ll
       - run: pip-audit --progress-spinner off
