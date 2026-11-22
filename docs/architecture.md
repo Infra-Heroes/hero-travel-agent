@@ -1,84 +1,82 @@
-# Aufbau
+# Architecture
 
-Eine FastAPI-Anwendung, ein Prozess, eine SQLite-Datei. Kein Build-Schritt, keine Warteschlange,
-kein zweiter Dienst.
+One FastAPI application, one process, one SQLite file. No build step, no queue, no second service.
 
 ```
 Browser ──► FastAPI (app/main.py)
-              ├─ auth.py      Einmalcodes, signierte Sitzungscookies
-              ├─ agent.py     Modellaufrufe über OpenRouter, JSON-Schema-Ausgabe
-              ├─ facts.py     Geocoding, gemessenes Wetter, Feiertage (vor dem Planen)
-              ├─ checks.py    Machbarkeit eines Plans (nach dem Planen)
-              ├─ store.py     SQLite: Nutzer, Reisen, Limits, Profil, Bewertungen, Freigaben
-              ├─ mailer.py    SMTP oder Konsole
-              ├─ report.py    täglicher Zahlenbericht an den Betreiber
+              ├─ auth.py      one-time codes, signed session cookies
+              ├─ agent.py     model calls through OpenRouter, JSON-schema output
+              ├─ facts.py     geocoding, measured weather, holidays (before planning)
+              ├─ checks.py    feasibility of a plan (after planning)
+              ├─ store.py     SQLite: users, trips, limits, profile, ratings, share links
+              ├─ mailer.py    SMTP or console
+              ├─ report.py    daily numbers report to the operator
               └─ metrics.py   Prometheus
 ```
 
-## Verzeichnisse
+## Layout
 
-| Pfad | Inhalt |
+| Path | Contents |
 |---|---|
-| `app/` | die Anwendung |
-| `app/schemas.py` | Ein- und Ausgaben; die Antwortklassen sind zugleich das JSON-Schema für das Modell |
-| `app/texts.py` | die wenigen Sätze, die der Server selbst sagt, deutsch und englisch |
-| `app/static/` | Startseite, Planer, Freigabe-Seite, Impressum, Datenschutz |
-| `app/static/render.js` | Darstellung von Vorschlägen und Plänen, gemeinsam für Planer und Freigabe |
-| `app/static/vendor/` | Leaflet 1.9.4, lokal, damit die CSP keine fremden Skripte erlauben muss |
-| `tests/` | pytest, ohne Netz und ohne Modell |
-| `deploy/observability/` | lokales Prometheus, Grafana und Mailpit zum Ausprobieren |
-| `hero.toml` | Deploy-Beschreibung für InfraHeroes |
+| `app/` | the application |
+| `app/schemas.py` | inputs and outputs; the answer classes are also the JSON schema the model fills |
+| `app/texts.py` | the few sentences the server says itself, German and English |
+| `app/static/` | landing page, planner, shared-trip page, legal notice, privacy policy |
+| `app/static/render.js` | rendering of suggestions and plans, shared by the planner and the shared page |
+| `app/static/vendor/` | Leaflet 1.9.4, local so the CSP needs no third-party scripts |
+| `tests/` | pytest, without network and without a model |
+| `deploy/observability/` | local Prometheus, Grafana and Mailpit to try things out |
+| `hero.toml` | deployment description for InfraHeroes |
 
-## Eine Planung, Schritt für Schritt
+## A day plan, step by step
 
-1. `POST /api/plan` prüft die Sitzung und zieht eine Anfrage vom Tageslimit ab (`store.try_spend`,
-   atomar, damit zwei Anfragen nicht beide die letzte nehmen).
-2. `facts.for_plan` sucht das Ziel (Open-Meteo Geocoding, mit Ländervorgabe nach dem Komma) und
-   holt mit Startdatum Wetter und Feiertage. Ergebnisse bleiben einen Tag im Speicher.
-3. `agent.plan_days` schickt Wunsch, Fakten und Profil an das Modell. Die Antwort muss dem Schema
-   `DayPlan` genügen und genau so viele Tage haben wie gewünscht, sonst wird einmal neu gefragt.
-4. `checks.check_plan` verwirft Orte weit weg vom Ziel, schätzt die Wege und schreibt Hinweise.
-5. Die Seite bekommt `PlanResult` (Plan, Fakten, Wege, Hinweise) und setzt alles als Text, nie als
-   HTML.
+1. `POST /api/plan` checks the session and takes one request from the daily limits
+   (`store.try_spend`, atomic, so two requests cannot both take the last one).
+2. `facts.for_plan` locates the destination (Open-Meteo geocoding; a country after the comma must
+   match) and, with a start date, fetches weather and holidays. Answers are cached for a day.
+3. `agent.plan_days` sends the wish, the facts and the profile to the model. The answer must match
+   the `DayPlan` schema and have exactly the requested number of days, or it is asked once more.
+4. `checks.check_plan` drops places far from the destination, estimates travel and writes notes.
+5. The page gets a `PlanResult` (plan, facts, routes, checks) and sets everything as text, never
+   as HTML.
 
-Ohne API-Key oder mit `AGENT_FAKE=1` antworten `fake_suggestions` und `fake_day_plan` mit festen
-Beispielen. Dann wird auch nichts nachgeschlagen.
+Without an API key, or with `AGENT_FAKE=1`, `fake_suggestions` and `fake_day_plan` answer with
+fixed samples, and nothing is looked up.
 
-## Schnittstelle
+## API
 
-Alle Antworten sind JSON; Fehler haben die Form `{"detail": "…"}` in der Sprache der Seite.
+All answers are JSON; errors look like `{"detail": "…"}` in the page's language.
 
-| Methode und Pfad | Zweck |
+| Method and path | Purpose |
 |---|---|
-| `POST /api/auth/request`, `POST /api/auth/verify`, `POST /api/auth/logout` | Code anfordern, anmelden, abmelden |
-| `GET /api/me`, `DELETE /api/me` | Konto und verbleibende Anfragen, Konto löschen |
-| `POST /api/suggest` | drei Vorschläge |
-| `POST /api/plan`, `POST /api/plan/refine` | Tagesplan, einen Tag neu planen |
-| `GET/PUT /api/profile` | Profil |
-| `GET/POST /api/votes` | Bewertungen |
-| `GET/POST /api/trips`, `GET/DELETE /api/trips/{id}` | gemerkte Reisen |
-| `GET /api/trips/{id}/calendar.ics` | Plan als Kalenderdatei |
-| `POST/DELETE /api/trips/{id}/share`, `GET /api/shared/{token}` | Freigabe-Link anlegen, zurückziehen, lesen |
-| `GET /healthz` | Lebenszeichen, sagt auch, ob der Demo-Modus läuft |
-| `GET /metrics`, `GET /api/stats`, `POST /api/report/send` | nur für den Betreiber |
+| `POST /api/auth/request`, `POST /api/auth/verify`, `POST /api/auth/logout` | ask for a code, sign in, sign out |
+| `GET /api/me`, `DELETE /api/me` | account and requests left, delete the account |
+| `POST /api/suggest` | three suggestions |
+| `POST /api/plan`, `POST /api/plan/refine` | day plan, replan one day |
+| `GET/PUT /api/profile` | profile |
+| `GET/POST /api/votes` | ratings |
+| `GET/POST /api/trips`, `GET/DELETE /api/trips/{id}` | saved trips |
+| `GET /api/trips/{id}/calendar.ics` | plan as a calendar file |
+| `POST/DELETE /api/trips/{id}/share`, `GET /api/shared/{token}` | create, withdraw, read a share link |
+| `GET /healthz` | liveness, also says whether demo mode is on |
+| `GET /metrics`, `GET /api/stats`, `POST /api/report/send` | operator only |
 
-## Datenbank
+## Database
 
-Eine SQLite-Datei `agent.db` im Datenverzeichnis. Tabellen werden beim Start mit
-`CREATE TABLE IF NOT EXISTS` angelegt; neue Funktionen bringen neue Tabellen mit, bestehende
-werden nicht verändert.
+One SQLite file `agent.db` in the data directory. Tables are created on start with
+`CREATE TABLE IF NOT EXISTS`; new features add new tables and leave existing ones as they are.
 
-| Tabelle | Inhalt |
+| Table | Contents |
 |---|---|
-| `users` | E-Mail-Adresse, angelegt beim ersten gültigen Code |
-| `login_codes` | Hash des Codes, Ablauf, Fehlversuche |
-| `trips` | gemerkte Vorschläge und Pläne (JSON) |
-| `shares` | Freigabe-Token, Reise, Ablauf |
-| `profiles` | Profil (JSON) |
-| `votes` | Bewertung pro Ziel |
-| `user_usage`, `usage` | Anfragen pro Person und Tag, insgesamt pro Tag |
-| `activity` | wer an welchem Tag aktiv war, für die Zahlen |
-| `meta` | Kleinigkeiten wie der Tag des letzten Berichts |
+| `users` | e-mail address, created on the first valid code |
+| `login_codes` | hash of the code, expiry, failed attempts |
+| `trips` | saved suggestions and plans (JSON) |
+| `shares` | share token, trip, expiry |
+| `profiles` | profile (JSON) |
+| `votes` | rating per destination |
+| `user_usage`, `usage` | requests per person and day, in total per day |
+| `activity` | who was active on which day, for the numbers |
+| `meta` | small things such as the day of the last report |
 
-Alles, was zu einer Person gehört, hängt per Fremdschlüssel an `users` und verschwindet beim
-Löschen des Kontos.
+Everything that belongs to a person hangs off `users` by a foreign key and goes when the account is
+deleted.

@@ -1,52 +1,50 @@
-# Mitmachen
+# Contributing
 
-## Einrichten
+## Setup
 
-Python 3.12 oder neuer (die CI nutzt 3.14), dazu [uv](https://docs.astral.sh/uv/).
+Python 3.12 or newer (CI uses 3.14) and [uv](https://docs.astral.sh/uv/).
 
 ```bash
 uv venv --python 3.14
 uv pip install -e ".[dev]"
-make run      # Demo-Modus auf http://localhost:8780, Anmeldecodes stehen im Log
+make run      # demo mode on http://localhost:8780, sign-in codes in the log
 ```
 
-Ohne `OPENROUTER_API_KEY` antwortet der Agent mit festen Beispielen. Für echte Antworten
-`.env.example` nach `.env` kopieren, ausfüllen und `make run` neu starten.
+Without `OPENROUTER_API_KEY` the agent answers with fixed samples. For real answers copy
+`.env.example` to `.env`, fill it in and run `make run` again.
 
-## Prüfen
+## Checks
 
 ```bash
-make check    # alles, was die CI auch prüft
+make check    # everything CI checks
 ```
 
-| Befehl | Prüft |
+| Command | Checks |
 |---|---|
-| `make lint` | `ruff check` und `ruff format --check` (Regeln in `pyproject.toml`) |
+| `make lint` | `ruff check` and `ruff format --check` (rules in `pyproject.toml`) |
 | `make types` | `mypy` |
-| `make test` | `pytest` mit Abdeckung, unter 90 % schlägt es fehl |
-| `make security` | `bandit` und `pip-audit` |
+| `make test` | `pytest` with coverage; below 95 % it fails |
+| `make security` | `bandit` and `pip-audit` |
 
-Die Tests brauchen weder Netz noch Modell: Der Agent läuft im Demo-Modus, externe Dienste werden
-mit `httpx.MockTransport` nachgebildet, jede Testfunktion bekommt eine eigene Datenbank
-(`tests/conftest.py`).
+The tests need neither network nor model: the agent runs in demo mode, external services are
+simulated with `httpx.MockTransport`, and every test gets its own database (`tests/conftest.py`).
 
-## Regeln
+## Rules
 
-- **Nichts vom Modell als HTML.** Alles, was aus einer Modellantwort stammt, wird mit
-  `textContent` gesetzt. `app/static/render.js` ist die Stelle dafür.
-- **Keine fremden Skripte.** Die Content-Security-Policy erlaubt nur Skripte vom eigenen Host;
-  Bibliotheken kommen nach `app/static/vendor/` (Version im Dateikopf).
-- **Datenbank nur erweitern.** Neue Funktionen bekommen neue Tabellen mit
-  `CREATE TABLE IF NOT EXISTS`; bestehende Spalten werden nicht geändert, weil die Datenbank im
-  Betrieb weiterlebt. Was einer Person gehört, hängt per `ON DELETE CASCADE` an `users`.
-- **Externe Dienste dürfen ausfallen.** Eine fehlende Antwort heißt: ohne diese Angabe weiter,
-  nicht Fehler.
-- **Texte zweisprachig.** Sätze der Seite sind deutsch; die englische Übersetzung steht in
-  `app/static/i18n.js`, Sätze des Servers in `app/texts.py`.
-- **Neue Datenflüsse** in [docs/privacy.md](docs/privacy.md) und auf der Seite `/datenschutz`
-  nachtragen.
+- **Nothing from the model as HTML.** Everything that comes from a model answer is set with
+  `textContent`; `app/static/render.js` is the place for it.
+- **No third-party scripts.** The Content Security Policy allows scripts from the own host only;
+  libraries go to `app/static/vendor/` (version in the file header).
+- **Only extend the database.** New features get new tables with `CREATE TABLE IF NOT EXISTS`;
+  existing columns are not changed, because the database lives on in production. What belongs to a
+  person hangs off `users` with `ON DELETE CASCADE`.
+- **External services may fail.** A missing answer means: carry on without it, not an error.
+- **Two languages.** Page texts are written in German; the English translation is in
+  `app/static/i18n.js`, the server's sentences are in `app/texts.py`. Code, comments, commits and
+  docs are in English.
+- **New data flows** go into [docs/privacy.md](docs/privacy.md) and the `/datenschutz` page.
 
-## Pull Requests
+## Pull requests
 
-Ein Thema pro Pull Request, mit Tests. Der Titel sagt, was sich für Nutzer oder Betrieb ändert;
-er landet so im [CHANGELOG](CHANGELOG.md). Die Prüfungen müssen grün sein, bevor gemergt wird.
+One topic per pull request, with tests. The title says what changes for users or operations; it
+ends up in the [CHANGELOG](CHANGELOG.md). Checks must be green before merging.

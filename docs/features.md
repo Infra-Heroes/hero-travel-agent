@@ -1,84 +1,81 @@
-# Funktionen
+# Features
 
-## Ideen finden
+## Trip ideas
 
-Eingabe: Zeitraum, Nächte, Budget für alle zusammen, Reisende, Abreiseort, Vorlieben und freier
-Text. Der Agent schlägt genau drei unterschiedliche Ziele vor. Für jedes:
+Input: time of travel, nights, budget for everyone, travellers, place of departure, interests and
+free text. The agent suggests exactly three different destinations, each with:
 
-- warum es passt, typisches Wetter, Anreise mit Zeit und Kosten, Unterkunftsart
-- drei bis fünf Highlights
-- eine Kostenschätzung nach Posten und ein Gesamtbetrag
-- eine ehrliche Einschränkung
+- why it fits, typical weather, getting there with time and cost, kind of accommodation
+- three to five highlights
+- a cost estimate by item and a total
+- an honest caveat
 
-Unter jedem Vorschlag stehen 👍 und 👎. Gemochtes wird bei den nächsten Vorschlägen bevorzugt,
-Abgelehntes nicht noch einmal vorgeschlagen.
+Each suggestion has 👍 and 👎. Liked destinations are favoured in later suggestions, disliked ones
+are not suggested again.
 
-## Tagesplan
+## Day plan
 
-Für ein gewähltes oder bekanntes Ziel, 1 bis 14 Tage, im Tempo entspannt, ausgewogen oder aktiv.
-Jeder Tag hat ein Motto, Vormittag, Nachmittag, Abend, einen Essens-Tipp, eine Alternative bei
-Regen und einen Hinweis zu Wegen. Der erste und der letzte Tag berücksichtigen An- und Abreise.
-Dazu kommt eine Packliste.
+For a chosen or known destination, 1 to 14 days, at a relaxed, balanced or active pace. Each day
+has a theme, morning, afternoon, evening, a food tip, a rainy-day alternative and a note on getting
+around. The first and last day allow for arrival and departure. A packing list comes with it.
 
-### Fakten statt Schätzung
+### Facts instead of guesses
 
-Mit Startdatum holt der Server vor dem Planen:
+With a start date the server looks up, before planning:
 
-- **Wetter:** Höchst- und Tiefstwerte und den Anteil der Regentage derselben Kalendertage in den
-  letzten drei Jahren, gemessen ([Open-Meteo Archiv](https://open-meteo.com/en/docs/historical-weather-api)).
-- **Feiertage und Schulferien** am Ziel ([OpenHolidays](https://www.openholidaysapi.org)), für die
-  rund 35 Länder, die die Quelle kennt.
+- **Weather:** highs, lows and the share of rainy days on the same calendar days in the last three
+  years, as measured ([Open-Meteo archive](https://open-meteo.com/en/docs/historical-weather-api)).
+- **Public and school holidays** at the destination ([OpenHolidays](https://www.openholidaysapi.org)),
+  for the roughly 35 countries it covers.
 
-Beides fließt in den Plan ein (Badetage, Regenalternativen, volle Ausflugsziele) und steht über dem
-Plan. Fällt eine Quelle aus, wird ohne sie geplant.
+Both go into the plan (beach days, rainy-day options, crowded sights) and are shown above it. If a
+source is down, the plan is made without it.
 
-### Karte
+### Map
 
-Das Modell nennt pro Tag die besuchten Orte mit Koordinaten. Orte mehr als 150 km vom Ziel weg
-verwirft der Server, der Rest erscheint auf einer OpenStreetMap-Karte, filterbar nach Tag.
+The model names the places of each day with coordinates. The server drops places more than 150 km
+from the destination; the rest appear on an OpenStreetMap map that can be filtered by day.
 
-### Machbarkeit
+### Feasibility
 
-`app/checks.py` prüft jeden Tag ohne externen Dienst:
+`app/checks.py` checks every day without an external service:
 
-- Wege zwischen den Orten in der Reihenfolge des Tages: Luftlinie mal 1,3, bis 2 km zu Fuß,
-  darüber mit Auto oder Bus samt 10 Minuten Aufschlag
-- Warnung, wenn ein Tag mehr Wege hat, als das Tempo verträgt (75, 120 oder 180 Minuten)
-- Warnung bei einem einzelnen Weg über 60 km
-- Warnung, wenn ein Ort an diesem Wochentag bekanntermaßen geschlossen ist
-- Hinweis an Feiertagen
+- travel between the places in the order of the day: straight line times 1.3, on foot up to
+  2 km, beyond that by car or bus with 10 minutes added
+- a warning when a day has more travel than its pace allows (75, 120 or 180 minutes)
+- a warning for a single leg over 60 km
+- a warning when a place is known to be closed on that weekday
+- a note on public holidays
 
-### Einen Tag anpassen
+### Refine a day
 
-„Diesen Tag anpassen“ plant einen einzelnen Tag nach einem Wunsch neu, zum Beispiel
-„entspannter“ oder „mehr für Kinder“. Die anderen Tage bleiben, ein gespeicherter Plan wird
-aktualisiert. Das kostet eine Anfrage, wie ein neuer Plan.
+"Adjust this day" replans a single day to a wish such as "more relaxed" or "more for kids". The
+other days stay; a saved plan is updated. It costs one request, like a new plan.
 
-## Meine Reisen
+## My trips
 
-Vorschläge und Pläne merken (bis zu 100), drucken oder als PDF speichern, als Kalenderdatei
-exportieren (ganze Tage oder mit Uhrzeiten) oder pro Tag in den Google-Kalender übernehmen.
+Save suggestions and plans (up to 100), print them or save as PDF, export a calendar file (whole
+days or with times) or add single days to Google Calendar.
 
-### Teilen
+### Sharing
 
-Ein gespeicherter Plan bekommt auf Wunsch einen Link `/s/<token>`, der 7, 30 oder 90 Tage gilt.
-Wer ihn hat, sieht die Reise ohne Konto, kann aber nichts ändern. Neu teilen macht einen neuen
-Link, „Link zurückziehen“ macht ihn sofort ungültig. Die Seite wird nicht indexiert und zeigt
-nichts über die Person, die geteilt hat.
+A saved plan can get a link `/s/<token>`, valid for 7, 30 or 90 days. Anyone with it sees the trip
+without an account but cannot change it. Sharing again makes a new link; "Withdraw link" ends it at
+once. The page is not indexed and shows nothing about the person who shared it.
 
-## Profil
+## Profile
 
-Abreiseort, Reisende, Budget, Vorlieben, was man meiden will, Barrierefreiheit und sonstige
-Hinweise. Das Profil füllt die Formulare vor und geht mit jeder Anfrage an das Modell.
+Place of departure, travellers, budget, interests, things to avoid, accessibility needs and other
+notes. The profile prefills the forms and goes with every request to the model.
 
-## Konto und Limits
+## Accounts and limits
 
-Anmelden mit E-Mail-Adresse und sechsstelligem Code, ohne Passwort. Jede Person hat ein
-Tageslimit an Anfragen, der Agent insgesamt auch, weil jede Anfrage Geld kostet. Das Konto lässt
-sich jederzeit samt aller Daten löschen. Details in [privacy.md](privacy.md) und
+Sign in with an e-mail address and a six-digit code, no password. Every person has a daily number of
+requests and the agent as a whole has one too, because every request costs money. The account can
+be deleted with all its data at any time. See [privacy.md](privacy.md) and
 [../SECURITY.md](../SECURITY.md).
 
-## Sprachen
+## Languages
 
-Deutsch und Englisch. Die Seite folgt der Browsersprache und lässt sich umschalten; das Modell
-antwortet in der gewählten Sprache.
+German and English. The page follows the browser's language and can be switched; the model answers
+in the chosen language.

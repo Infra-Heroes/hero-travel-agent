@@ -1,7 +1,9 @@
 [project]
 name = "hero-travel-agent"
-version = "1.0.0"
-description = "Urlaubs-Agent: personal travel planner (suggestions + day plans, no booking)"
+version = "1.1.0"
+description = "Urlaubs-Agent: a personal trip planner that suggests and plans, and books nothing. An example app for InfraHeroes."
+readme = "README.md"
+license = "MIT"
 requires-python = ">=3.12"
 dependencies = [
     "fastapi>=0.115",
@@ -22,8 +24,12 @@ dev = [
     "pip-audit>=2.7",
 ]
 
+[project.urls]
+Homepage = "https://www.urlaubs-planung.org"
+Source = "https://github.com/Infra-Heroes/hero-travel-agent"
+
 [build-system]
-requires = ["setuptools>=69"]
+requires = ["setuptools>=77"]
 build-backend = "setuptools.build_meta"
 
 [tool.setuptools]
@@ -35,7 +41,7 @@ app = ["static/*", "static/vendor/*"]
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 asyncio_mode = "auto"
-addopts = "--cov=app --cov-report=term-missing:skip-covered --cov-fail-under=90"
+addopts = "--cov=app --cov-report=term-missing:skip-covered --cov-fail-under=95"
 
 [tool.coverage.run]
 branch = true
