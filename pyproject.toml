@@ -1,6 +1,6 @@
 [project]
 name = "hero-travel-agent"
-version = "0.1.0"
+version = "1.0.0"
 description = "Urlaubs-Agent: personal travel planner (suggestions + day plans, no booking)"
 requires-python = ">=3.12"
 dependencies = [
