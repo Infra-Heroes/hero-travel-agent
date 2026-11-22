@@ -159,3 +159,41 @@ async def test_a_plan_with_the_wrong_number_of_days_is_asked_for_again(monkeypat
 
     result = await make_agent(monkeypatch, handler).plan_days(req)
     assert len(result.days) == 4 and not answers
+
+
+async def test_refine_asks_for_one_day_and_keeps_number_and_date(monkeypatch):
+    from app.schemas import DayPlanRequest, PlanResult, RefineRequest
+
+    plan = agent_module.fake_day_plan(DayPlanRequest(destination="Lissabon", days=3))
+    req = RefineRequest(plan=PlanResult.model_validate(plan.model_dump()), day=2, wish="mehr Strand")
+    seen = {}
+    answer = plan.days[0].model_copy(update={"day": 7, "date": "1999-01-01", "theme": "Strandtag"})
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        seen["body"] = json.loads(request.content)
+        return httpx.Response(200, json=completion(answer.model_dump_json()))
+
+    day = await make_agent(monkeypatch, handler).refine_day(req, "\nBitte vermeiden: Treppen")
+    assert (day.day, day.date, day.theme) == (2, plan.days[1].date, "Strandtag")
+    prompt = seen["body"]["messages"][1]["content"]
+    assert "Ändere nur Tag 2" in prompt and "mehr Strand" in prompt and "Treppen" in prompt
+    assert "places" in seen["body"]["response_format"]["json_schema"]["schema"]["properties"]
+
+
+async def test_context_reaches_the_suggest_and_plan_prompts(monkeypatch):
+    from app.schemas import DayPlanRequest
+
+    prompts = []
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        body = json.loads(request.content)
+        prompts.append(body["messages"][1]["content"])
+        if "Tagesplan" in prompts[-1]:
+            req = DayPlanRequest(destination="Lissabon", days=2)
+            return httpx.Response(200, json=completion(agent_module.fake_day_plan(req).model_dump_json()))
+        return httpx.Response(200, json=completion(valid_answer()))
+
+    a = make_agent(monkeypatch, handler)
+    await a.suggest(BRIEF, "\nFrüher gefallen: Madeira")
+    await a.plan_days(DayPlanRequest(destination="Lissabon", days=2), "\nFakten: warm")
+    assert "Madeira" in prompts[0] and "Fakten: warm" in prompts[1] and "places" in prompts[1]

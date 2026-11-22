@@ -81,6 +81,9 @@ class Metrics:
             registry=self.registry,
         )
         self.signups = Counter("travel_agent_signups_total", "New users.", registry=self.registry)
+        self.votes = Counter(
+            "travel_agent_votes_total", "Thumbs on suggested destinations.", ["vote"], registry=self.registry
+        )
 
     def render(self) -> bytes:
         return generate_latest(self.registry)

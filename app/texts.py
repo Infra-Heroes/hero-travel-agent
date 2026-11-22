@@ -50,6 +50,10 @@ MESSAGES: dict[str, dict[str, str]] = {
     "bad_plan": {"de": "Ungültiger Reiseplan", "en": "Invalid trip plan"},
     "no_trip": {"de": "Reise nicht gefunden", "en": "Trip not found"},
     "no_plan": {"de": "Kein Tagesplan gefunden", "en": "No day plan found"},
+    "share_gone": {
+        "de": "Dieser Link ist abgelaufen oder wurde zurückgezogen.",
+        "en": "This link has expired or was withdrawn.",
+    },
     "mail_subject": {
         "de": "Dein Code für den Urlaubs-Agent",
         "en": "Your code for the holiday agent",

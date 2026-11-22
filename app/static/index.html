@@ -7,6 +7,7 @@
   <title>Urlaubs-Agent</title>
   <link rel="stylesheet" href="/static/style.css">
   <link rel="stylesheet" href="/static/legal.css">
+  <link rel="stylesheet" href="/static/vendor/leaflet.css">
 </head>
 <body>
   <header class="top">
@@ -30,6 +31,7 @@
     <button role="tab" data-tab="ideas" aria-selected="true">Ideen finden</button>
     <button role="tab" data-tab="plan" aria-selected="false">Tagesplan</button>
     <button role="tab" data-tab="trips" aria-selected="false">Meine Reisen</button>
+    <button role="tab" data-tab="profile" aria-selected="false">Profil</button>
   </nav>
 
   <main>
@@ -107,6 +109,27 @@
       </div>
       <div id="trip-out"></div>
     </section>
+
+    <!-- Profil -->
+    <section id="tab-profile" class="panel" hidden>
+      <form id="profileform" class="card form">
+        <h2>Mein Profil</h2>
+        <p class="muted">Einmal ausfüllen: Die Angaben stehen dann schon in den Formularen, und was du meiden willst, beachtet der Agent bei jeder Anfrage.</p>
+        <div class="grid">
+          <label>Abreise ab<input name="origin" list="dl-origin" maxlength="60" autocomplete="off"></label>
+          <label>Erwachsene<input name="adults" type="number" min="1" max="10" value="2"></label>
+          <label>Kinder<input name="children" type="number" min="0" max="10" value="0"></label>
+          <label>Budget gesamt (€)<input name="budget_eur" type="number" min="100" max="50000" step="50"><small class="hint">leer lassen, wenn es jedes Mal anders ist</small></label>
+        </div>
+        <fieldset class="chips" aria-label="Vorlieben">
+          <legend>Vorlieben</legend>
+        </fieldset>
+        <label>Bitte meiden<input name="avoid" maxlength="300" placeholder="z. B. lange Flüge, Kreuzfahrten, Partyorte"></label>
+        <label>Barrierefreiheit<input name="accessibility" maxlength="300" placeholder="z. B. Rollstuhl, wenig Treppen, Kinderwagen"></label>
+        <label>Sonst noch<textarea name="notes" rows="2" maxlength="500" placeholder="z. B. vegetarisch, mit Hund"></textarea></label>
+        <div class="actions"><button type="submit" class="primary">Profil speichern</button></div>
+      </form>
+    </section>
   </main>
 
   <datalist id="dl-when"></datalist>
@@ -115,43 +138,8 @@
 
   <div id="toast" role="status" aria-live="polite" hidden></div>
 
-  <template id="t-suggestion">
-    <article class="card suggestion">
-      <header>
-        <h3 class="dest"></h3>
-        <span class="price"></span>
-      </header>
-      <p class="why"></p>
-      <dl class="facts">
-        <div><dt>Wetter</dt><dd class="weather"></dd></div>
-        <div><dt>Anreise</dt><dd class="getting"></dd></div>
-        <div><dt>Unterkunft</dt><dd class="stay"></dd></div>
-      </dl>
-      <h4>Highlights</h4>
-      <ul class="highlights"></ul>
-      <details>
-        <summary>Kostenschätzung</summary>
-        <table class="costs"><tbody></tbody></table>
-      </details>
-      <p class="caveat"></p>
-      <div class="actions"><button class="primary to-plan">Tagesplan dafür</button></div>
-    </article>
-  </template>
-
-  <template id="t-day">
-    <article class="day">
-      <header><span class="num"></span><h3 class="theme"></h3><span class="date muted"></span></header>
-      <ol class="slots">
-        <li><span>Vormittag</span><p class="morning"></p></li>
-        <li><span>Nachmittag</span><p class="afternoon"></p></li>
-        <li><span>Abend</span><p class="evening"></p></li>
-      </ol>
-      <p class="extra"><b>Essen:</b> <span class="food"></span></p>
-      <p class="extra"><b>Bei Regen:</b> <span class="rain"></span></p>
-      <p class="extra muted"><b>Wege:</b> <span class="logistics"></span></p>
-    </article>
-  </template>
-
+  <script src="/static/vendor/leaflet.js"></script>
+  <script src="/static/render.js"></script>
   <script src="/static/app.js"></script>
   <script src="/static/legal.js" defer></script>
 </body>
